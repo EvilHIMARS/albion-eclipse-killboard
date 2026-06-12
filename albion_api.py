@@ -1,3 +1,5 @@
+import re
+
 import aiohttp
 import logging
 
@@ -16,6 +18,12 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 async def get_events(limit=50):
     """Отримуємо глобальні події (без фільтрації на сервері, щоб уникнути 400)"""
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(limit, 200))
+
     url = f"{BASE_URL}/events?limit={limit}"
 
     try:
@@ -40,10 +48,12 @@ async def get_events(limit=50):
         return []
 
 
+_SAFE_ID_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
+
 async def get_guild_info(guild_id):
     """Отримуємо інформацію про гільдію за її ID"""
-    if not guild_id:
-        logger.warning("[API] get_guild_info викликано без guild_id")
+    if not guild_id or not _SAFE_ID_RE.match(str(guild_id)):
+        logger.warning("[API] get_guild_info викликано без guild_id або з невалідним ID")
         return None
 
     url = f"{BASE_URL}/guilds/{guild_id}"
