@@ -10,6 +10,9 @@ with patch("discord.ext.commands.Bot.run"):
         dispatch_event,
         PROCESSED_EVENTS,
         MAX_CACHE_SIZE,
+        _format_item_name,
+        _get_equipment_text,
+        t,
     )
 
 
@@ -20,8 +23,25 @@ with patch("discord.ext.commands.Bot.run"):
 def _full_event(**overrides):
     ev = {
         "EventId": 42,
-        "Killer": {"Name": "Attacker", "GuildName": "AttackGuild"},
-        "Victim": {"Name": "Defender", "GuildName": "DefendGuild"},
+        "Killer": {
+            "Name": "Attacker", "GuildName": "AttackGuild",
+            "AverageItemPower": 1200,
+            "Equipment": {
+                "MainHand": {"Type": "T6_MAIN_SPEAR@2", "Count": 1, "Quality": 3},
+                "Armor": {"Type": "T5_ARMOR_PLATE_SET1", "Count": 1, "Quality": 2},
+                "Head": None, "Shoes": None, "OffHand": None,
+                "Bag": None, "Cape": None, "Mount": None, "Potion": None, "Food": None,
+            }
+        },
+        "Victim": {
+            "Name": "Defender", "GuildName": "DefendGuild",
+            "AverageItemPower": 800,
+            "Equipment": {
+                "MainHand": {"Type": "T4_2H_BOW_KEEPER@1", "Count": 1, "Quality": 2},
+                "Armor": None, "Head": None, "Shoes": None, "OffHand": None,
+                "Bag": None, "Cape": None, "Mount": None, "Potion": None, "Food": None,
+            }
+        },
         "TotalVictimKillFame": 12345,
         "Participants": [
             {"Name": "Helper", "GuildName": "HelpGuild", "DamageDone": 500, "SupportValue": 0},
@@ -80,7 +100,6 @@ class TestCreateBattleEmbed:
         ev = _full_event()
         ev["Participants"] = []
         embed = create_battle_embed(ev, "T", 0x0)
-        # Should still have at least killer/victim/fame fields
         assert len(embed.fields) >= 3
 
     def test_none_participants(self):
@@ -95,13 +114,70 @@ class TestCreateBattleEmbed:
         ev["Victim"] = {"Name": "Target"}
         embed = create_battle_embed(ev, "T", 0x0)
         field_values = [f.value for f in embed.fields]
-        assert any("Без гільдії" in v for v in field_values)
+        no_guild = t("no_guild")
+        assert any(no_guild in v for v in field_values)
 
     def test_zero_fame(self):
         ev = _full_event(TotalVictimKillFame=0)
         embed = create_battle_embed(ev, "T", 0x0)
         field_values = [f.value for f in embed.fields]
         assert any("0" in v for v in field_values)
+
+    def test_equipment_shown_in_embed(self):
+        ev = _full_event()
+        embed = create_battle_embed(ev, "T", 0x0)
+        field_names = [f.name for f in embed.fields]
+        assert any(t("killer_gear") in n for n in field_names)
+
+    def test_ip_shown_in_embed(self):
+        ev = _full_event()
+        embed = create_battle_embed(ev, "T", 0x0)
+        field_values = [f.value for f in embed.fields]
+        assert any("1200" in v for v in field_values)
+
+
+# =====================================================================
+# _format_item_name / _get_equipment_text
+# =====================================================================
+
+class TestEquipmentFormatting:
+    def test_format_item_name_basic(self):
+        result = _format_item_name("T6_MAIN_SPEAR@2")
+        assert "T6" in result
+        assert "SPEAR" in result
+        assert ".2" in result
+
+    def test_format_item_name_no_enchant(self):
+        result = _format_item_name("T5_ARMOR_PLATE_SET1")
+        assert "T5" in result
+        assert ".0" not in result  # no enchant 0
+
+    def test_format_item_name_none(self):
+        assert _format_item_name(None) == "—"
+
+    def test_format_item_name_empty(self):
+        assert _format_item_name("") == "—"
+
+    def test_get_equipment_text_with_items(self):
+        eq = {
+            "MainHand": {"Type": "T6_MAIN_SPEAR@2", "Count": 1, "Quality": 3},
+            "Armor": {"Type": "T5_ARMOR_PLATE_SET1", "Count": 1, "Quality": 2},
+            "Head": None, "Shoes": None, "Cape": None, "Mount": None
+        }
+        result = _get_equipment_text(eq)
+        assert t("weapon") in result
+        assert t("armor") in result
+
+    def test_get_equipment_text_all_none(self):
+        eq = {"MainHand": None, "Armor": None, "Head": None, "Shoes": None, "Cape": None, "Mount": None}
+        result = _get_equipment_text(eq)
+        assert result == "—"
+
+    def test_get_equipment_text_none_input(self):
+        assert _get_equipment_text(None) == "—"
+
+    def test_get_equipment_text_empty_dict(self):
+        assert _get_equipment_text({}) == "—"
 
 
 # =====================================================================
@@ -128,12 +204,9 @@ class TestManageCache:
         assert manage_cache(3) is True
 
     def test_cache_clears_when_exceeding_max_size(self):
-        # Fill cache to MAX_CACHE_SIZE + 1 entries (0 .. MAX_CACHE_SIZE)
         for i in range(MAX_CACHE_SIZE + 1):
             manage_cache(i)
-        # Next call sees len > MAX_CACHE_SIZE and clears before adding
         assert manage_cache(MAX_CACHE_SIZE + 1) is True
-        # Old entries were purged, so re-adding an old id succeeds
         assert manage_cache(0) is True
 
     def test_cache_size_stays_bounded(self):
@@ -202,7 +275,6 @@ class TestDispatchEvent:
         kill_ch = AsyncMock()
         kill_ch.send.side_effect = Exception("Discord API error")
         event = _full_event()
-        # Should not raise
         await dispatch_event(event, "kill", kill_ch, None)
 
     @pytest.mark.asyncio
@@ -212,3 +284,40 @@ class TestDispatchEvent:
         await dispatch_event(event, "kill", kill_ch, None)
         call_kwargs = kill_ch.send.call_args
         assert "embed" in call_kwargs.kwargs
+
+    @pytest.mark.asyncio
+    async def test_big_kill_sends_with_ping(self):
+        kill_ch = AsyncMock()
+        event = _full_event(TotalVictimKillFame=200000)
+        await dispatch_event(event, "kill", kill_ch, None)
+        call_kwargs = kill_ch.send.call_args
+        assert "content" in call_kwargs.kwargs
+        assert "200,000" in call_kwargs.kwargs["content"]
+
+    @pytest.mark.asyncio
+    async def test_small_kill_no_ping(self):
+        kill_ch = AsyncMock()
+        event = _full_event(TotalVictimKillFame=50)
+        await dispatch_event(event, "kill", kill_ch, None)
+        call_kwargs = kill_ch.send.call_args
+        # Small kills should not have content (only embed)
+        content = call_kwargs.kwargs.get("content")
+        assert content is None
+
+
+# =====================================================================
+# Translation system
+# =====================================================================
+
+class TestTranslation:
+    def test_t_returns_ua_by_default(self):
+        result = t("killer")
+        assert "Вбивця" in result
+
+    def test_t_with_kwargs(self):
+        result = t("big_kill_alert", fame=100000)
+        assert "100,000" in result
+
+    def test_t_unknown_key_returns_key(self):
+        result = t("nonexistent_key_xyz")
+        assert result == "nonexistent_key_xyz"
