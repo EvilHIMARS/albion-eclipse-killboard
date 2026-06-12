@@ -3,12 +3,12 @@ import logging
 
 logger = logging.getLogger("AlbionBot.API")
 
-# Використовуємо стабільний альтернативний хост-дзеркало Альбіону (Albion2D)
-BASE_URL = "https://gameinfo.albiononline2d.com/api/gameinfo"
+# Прямий офіційний шлюз для сервера Albion Europe (Амстердам)
+# Саме звідси інші боти миттєво отримують європейські кілли
+BASE_URL = "https://gameinfo-amsterdam.albiononline.com/api/gameinfo"
 
 async def get_events(limit=50):
-    """Отримує свіжі події з альтернативного стабільного хосту"""
-    # Для цього хосту потрібен правильний User-Agent, щоб він не блокував запити
+    """Отримує свіжі події з європейського шлюзу Albion"""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
@@ -23,14 +23,14 @@ async def get_events(limit=50):
                         return data
                     return []
                 else:
-                    logger.warning(f"[API ALTERNATIVE] Хост повернув статус {response.status}. Пробуємо перечекати.")
+                    logger.warning(f"[API EUROPE] Сервер повернув статус {response.status}. Пропуск.")
                     return []
     except Exception as e:
-        logger.error(f"[API ALTERNATIVE ERROR] Не вдалося зв'язатися з альтернативним хостом: {e}")
+        logger.error(f"[API EUROPE ERROR] Помилка підключення до європейського сервера: {e}")
         return []
 
 async def get_guild_info(guild_id):
-    """Отримує інформацію про гільдію"""
+    """Отримує інформацію про гільдію з європейського сервера"""
     if not guild_id:
         return None
         
