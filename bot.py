@@ -28,7 +28,7 @@ DEATH_CHANNEL = int(os.getenv("DEATH_CHANNEL_ID"))
 intents = discord.Intents.default()
 intents.message_content = True 
 
-# Отключаем встроенный хелп прямо здесь с помощью help_command=None
+# Отключаем встроенный хелп, чтобы сделать свой custom
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 last_event = None
@@ -38,24 +38,74 @@ processed = set()
 
 @bot.command()
 async def guild(ctx):
-    """Показывает информацию о гильдии"""
+    """Полная информация о гильдии и настройках бота"""
     data = await get_guild_info(GUILD_ID)
     if not data:
-        await ctx.send("Не удалось получить данные о гильдии.")
+        await ctx.send("❌ Не удалось получить данные о гильдии от API Albion.")
         return
     
-    embed = discord.Embed(title=f"Информация: {data.get('Name')}", color=0x3498db)
-    embed.add_field(name="Лидер", value=data.get('FounderName', 'Нет'), inline=True)
-    embed.add_field(name="Участников", value=data.get('MemberCount', 0), inline=True)
-    embed.add_field(name="Альянс", value=data.get('AllianceName', 'Без альянса'), inline=False)
-    embed.add_field(name="Fame", value=f"{data.get('KillFame', 0):,}", inline=True)
+    # Получаем каналы, чтобы красиво тегнуть их в дискорде
+    kill_ch = bot.get_channel(KILL_CHANNEL)
+    death_ch = bot.get_channel(DEATH_CHANNEL)
+    
+    kill_mention = kill_ch.mention if kill_ch else f"`ID: {KILL_CHANNEL} (Не найден)`"
+    death_mention = death_ch.mention if death_ch else f"`ID: {DEATH_CHANNEL} (Не найден)`"
+    
+    embed = discord.Embed(title=f"🏰 Полная статистика гильдии: {data.get('Name')}", color=0x3498db)
+    embed.add_field(name="👑 Лидер (Основатель)", value=data.get('FounderName', 'Нет'), inline=True)
+    embed.add_field(name="👥 Участников", value=f"{data.get('MemberCount', 0)} / 300", inline=True)
+    embed.add_field(name="🤝 Альянс", value=f"[{data.get('AllianceTag', '—')}] {data.get('AllianceName', 'Без альянса')}", inline=False)
+    embed.add_field(name="⚔️ Общий PvP Kill Fame", value=f"{data.get('KillFame', 0):,}", inline=True)
+    embed.add_field(name="💀 Общий PvP Death Fame", value=f"{data.get('DeathFame', 0):,}", inline=True)
+    
+    # Блок с инфой о распределении логов
+    embed.add_field(
+        name="⚙️ Куда бот отправляет логи:", 
+        value=f"• ⚔️ **Убийства и Ассисты:** {kill_mention}\n• 💀 **Смерти согильдийцев:** {death_mention}", 
+        inline=False
+    )
+    
     await ctx.send(embed=embed)
 
 @bot.command()
+async def testkill(ctx):
+    """Симуляция успешного убийства"""
+    kill_ch = bot.get_channel(KILL_CHANNEL)
+    if not kill_ch:
+        await ctx.send("❌ Ошибка: Канал для убийств не найден в кэше бота. Проверьте ID.")
+        return
+    
+    embed = discord.Embed(title="⚔️ ТЕСТОВОЕ УБИЙСТВО (Симуляция)", color=0x2ecc71)
+    embed.add_field(name="Killer (Наш боец)", value=f"Убийца_Из_Eclipse [{GUILD_ID[:6]}...]", inline=False)
+    embed.add_field(name="Victim (Враг)", value="КакойТоБедолага [MOCK_GUILD]", inline=False)
+    embed.add_field(name="Fame", value="250,000", inline=False)
+    embed.set_footer(text="Тестовый вызов команды !testkill")
+    
+    await kill_ch.send(embed=embed)
+    await ctx.send(f"✅ Тестовая карточка убийства отправлена в канал {kill_ch.mention}!")
+
+@bot.command()
+async def testdeath(ctx):
+    """Симуляция смерти нашего бойца"""
+    death_ch = bot.get_channel(DEATH_CHANNEL)
+    if not death_ch:
+        await ctx.send("❌ Ошибка: Канал для смертей не найден в кэше бота. Проверьте ID.")
+        return
+    
+    embed = discord.Embed(title="💀 ТЕСТОВАЯ СМЕРТЬ (Симуляция)", color=0xe74c3c)
+    embed.add_field(name="Killer (Враг)", value="ЗлобныйГанкер [ARCH]", inline=False)
+    embed.add_field(name="Victim (Наш боец)", value=f"НеудачливыйСогильдиец [{GUILD_ID[:6]}...]", inline=False)
+    embed.add_field(name="Fame", value="120,000", inline=False)
+    embed.set_footer(text="Тестовый вызов команды !testdeath")
+    
+    await death_ch.send(embed=embed)
+    await ctx.send(f"✅ Тестовая карточка смерти отправлена в канал {death_ch.mention}!")
+
+@bot.command()
 async def last(ctx):
-    """Последнее событие"""
+    """Последнее реальное событие из мониторинга"""
     if not last_event:
-        await ctx.send("Событий пока не было.")
+        await ctx.send("Реальных событий с момента запуска бота ещё не зафиксировано.")
         return
     
     e = last_event
@@ -67,24 +117,26 @@ async def last(ctx):
 
 @bot.command()
 async def ping(ctx):
-    """Проверка бота"""
+    """Проверка задержки бота"""
     await ctx.send(f"Понг! Задержка: {round(bot.latency * 1000)}мс")
 
 @bot.command()
 async def kb(ctx):
-    """Ссылка на киллборд"""
-    url = f"https://albiononline.com/en/killboard/guild/{GUILD_ID}"
-    await ctx.send(f"Киллборд гильдии: {url}")
+    """Ссылка на киллборд гильдии"""
+    url = f"https://albiononline.com/en/killboard/guild/{GUILD_ID}?server=live_ams"
+    await ctx.send(f"Киллборд гильдии (Европа): {url}")
 
 @bot.command()
 async def help(ctx):
-    """Список команд"""
-    msg = """**Команды бота:**
-`!guild` - Статистика гильдии
-`!last` - Последнее событие
-`!ping` - Задержка бота
-`!kb` - Ссылка на киллборд
-`!help` - Эта справка"""
+    """Список всех команд"""
+    msg = """**Доступные команды бота:**
+`!guild` - Полная статистика гильдии + настройки каналов
+`!testkill` - Отправить тестовое убийство в килл-борд
+`!testdeath` - Отправить тестовую смерть в дед-борд
+`!last` - Показать последнее реальное событие из игры
+`!kb` - Ссылка на официальный киллборд
+`!ping` - Проверить, живой ли бот
+`!help` - Показать это сообщение"""
     await ctx.send(msg)
 
 # --- МОНИТОРИНГ ---
@@ -125,7 +177,7 @@ async def monitor():
                     embed.title = "🤝 АССИСТ"
                     if kill_ch: await kill_ch.send(embed=embed)
         except Exception as e:
-            print(f"Ошибка: {e}")
+            print(f"Ошибка в мониторинге: {e}")
         await asyncio.sleep(30)
 
 @bot.event
