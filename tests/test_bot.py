@@ -95,7 +95,7 @@ class TestCreateBattleEmbed:
         ev["Victim"] = {"Name": "Target"}
         embed = create_battle_embed(ev, "T", 0x0)
         field_values = [f.value for f in embed.fields]
-        assert any("Без гильдии" in v for v in field_values)
+        assert any("Без гільдії" in v for v in field_values)
 
     def test_zero_fame(self):
         ev = _full_event(TotalVictimKillFame=0)
