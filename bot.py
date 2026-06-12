@@ -28,11 +28,47 @@ DEATH_CHANNEL = int(os.getenv("DEATH_CHANNEL_ID"))
 intents = discord.Intents.default()
 intents.message_content = True 
 
-# Отключаем встроенный хелп, чтобы сделать свой custom
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 last_event = None
 processed = set()
+
+# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КАРТОЧЕК БОЯ ---
+def create_battle_embed(event, title, color):
+    """Генерирует подробный Embed с уроном и отхилом участников"""
+    killer = event.get("Killer", {})
+    victim = event.get("Victim", {})
+    fame = event.get("TotalVictimKillFame", 0)
+    
+    embed = discord.Embed(title=title, color=color)
+    embed.add_field(name="👑 Главный убийца", value=f"**{killer.get('Name', 'Unknown')}**\nGuild: [{killer.get('GuildName', 'Без гильдии')}]", inline=True)
+    embed.add_field(name="💀 Жертва", value=f"**{victim.get('Name', 'Unknown')}**\nGuild: [{victim.get('GuildName', 'Без гильдии')}]", inline=True)
+    embed.add_field(name="✨ Слава за убийство", value=f"{fame:,}", inline=False)
+    
+    # Парсим участников (нанесённый урон и отхил)
+    participants = event.get("Participants", [])
+    if participants:
+        damage_list = []
+        heal_list = []
+        
+        for p in participants:
+            name = p.get("Name", "Unknown")
+            damage = p.get("DamageDone", 0)
+            support = p.get("SupportValue", 0) # Отхил и ассисты в игре
+            
+            if damage > 0:
+                damage_list.append(f"⚔️ **{name}**: {damage:,} DMG")
+            if support > 0:
+                heal_list.append(f"🧪 **{name}**: {support:,} HEAL")
+        
+        if damage_list:
+            embed.add_field(name="📈 Нанесённый урон:", value="\n".join(damage_list), inline=False)
+        if heal_list:
+            embed.add_field(name="💚 Исцеление / Поддержка:", value="\n".join(heal_list), inline=False)
+    else:
+        embed.add_field(name="📊 Статистика участников", value="Нет данных об уроне.", inline=False)
+        
+    return embed
 
 # --- КОМАНДЫ ---
 
@@ -44,7 +80,6 @@ async def guild(ctx):
         await ctx.send("❌ Не удалось получить данные о гильдии от API Albion.")
         return
     
-    # Получаем каналы, чтобы красиво тегнуть их в дискорде
     kill_ch = bot.get_channel(KILL_CHANNEL)
     death_ch = bot.get_channel(DEATH_CHANNEL)
     
@@ -58,44 +93,59 @@ async def guild(ctx):
     embed.add_field(name="⚔️ Общий PvP Kill Fame", value=f"{data.get('KillFame', 0):,}", inline=True)
     embed.add_field(name="💀 Общий PvP Death Fame", value=f"{data.get('DeathFame', 0):,}", inline=True)
     
-    # Блок с инфой о распределении логов
     embed.add_field(
         name="⚙️ Куда бот отправляет логи:", 
         value=f"• ⚔️ **Убийства и Ассисты:** {kill_mention}\n• 💀 **Смерти согильдийцев:** {death_mention}", 
         inline=False
     )
-    
     await ctx.send(embed=embed)
 
 @bot.command()
 async def testkill(ctx):
-    """Симуляция успешного убийства"""
+    """Симуляция убийства с демонстрацией урона и отхила"""
     kill_ch = bot.get_channel(KILL_CHANNEL)
     if not kill_ch:
-        await ctx.send("❌ Ошибка: Канал для убийств не найден в кэше бота. Проверьте ID.")
+        await ctx.send("❌ Ошибка: Канал для убийств не найден.")
         return
     
-    embed = discord.Embed(title="⚔️ ТЕСТОВОЕ УБИЙСТВО (Симуляция)", color=0x2ecc71)
-    embed.add_field(name="Killer (Наш боец)", value=f"Убийца_Из_Eclipse [{GUILD_ID[:6]}...]", inline=False)
-    embed.add_field(name="Victim (Враг)", value="КакойТоБедолага [MOCK_GUILD]", inline=False)
-    embed.add_field(name="Fame", value="250,000", inline=False)
+    # Создаем фейковый лог боя
+    mock_event = {
+        "TotalVictimKillFame": 350000,
+        "Killer": {"Name": "Убийца_Из_Eclipse", "GuildName": "x E C L I P S E x"},
+        "Victim": {"Name": "Бедолага_Враг", "GuildName": "Забор"},
+        "Participants": [
+            {"Name": "Убийца_Из_Eclipse", "DamageDone": 4500, "SupportValue": 0},
+            {"Name": "ТвойДДСогильдиец", "DamageDone": 3200, "SupportValue": 0},
+            {"Name": "НашХилер", "DamageDone": 0, "SupportValue": 5400}
+        ]
+    }
+    
+    embed = create_battle_embed(mock_event, "⚔️ ТЕСТОВОЕ УБИЙСТВО (Симуляция урона)", 0x2ecc71)
     embed.set_footer(text="Тестовый вызов команды !testkill")
     
     await kill_ch.send(embed=embed)
-    await ctx.send(f"✅ Тестовая карточка убийства отправлена в канал {kill_ch.mention}!")
+    await ctx.send(f"✅ Тестовая карточка с уроном отправлена в канал {kill_ch.mention}!")
 
 @bot.command()
 async def testdeath(ctx):
-    """Симуляция смерти нашего бойца"""
+    """Симуляция смерти нашего бойца с демонстрацией урона врагов"""
     death_ch = bot.get_channel(DEATH_CHANNEL)
     if not death_ch:
-        await ctx.send("❌ Ошибка: Канал для смертей не найден в кэше бота. Проверьте ID.")
+        await ctx.send("❌ Ошибка: Канал для смертей не найден.")
         return
     
-    embed = discord.Embed(title="💀 ТЕСТОВАЯ СМЕРТЬ (Симуляция)", color=0xe74c3c)
-    embed.add_field(name="Killer (Враг)", value="ЗлобныйГанкер [ARCH]", inline=False)
-    embed.add_field(name="Victim (Наш боец)", value=f"НеудачливыйСогильдиец [{GUILD_ID[:6]}...]", inline=False)
-    embed.add_field(name="Fame", value="120,000", inline=False)
+    mock_event = {
+        "TotalVictimKillFame": 185000,
+        "Killer": {"Name": "ЖестокийГанкер", "GuildName": "ARCH"},
+        "Victim": {"Name": "НеудачливыйСогильдиец", "GuildName": "x E C L I P S E x"},
+        "Participants": [
+            {"Name": "ЖестокийГанкер", "DamageDone": 2800, "SupportValue": 0},
+            {"Name": "ВторойВраг", "DamageDone": 1900, "SupportValue": 0},
+            {"Name": "ВражескийХил", "DamageDone": 0, "SupportValue": 3100}
+        ]
+    }
+    
+    embed = create_battle_embed(mock_event, "💀 ТЕСТОВАЯ СМЕРТЬ (Симуляция урона врагов)", 0xe74c3c)
     embed.set_footer(text="Тестовый вызов команды !testdeath")
     
     await death_ch.send(embed=embed)
@@ -103,16 +153,13 @@ async def testdeath(ctx):
 
 @bot.command()
 async def last(ctx):
-    """Последнее реальное событие из мониторинга"""
+    """Последнее реальное событие"""
     if not last_event:
         await ctx.send("Реальных событий с момента запуска бота ещё не зафиксировано.")
         return
     
-    e = last_event
-    title = "☠️ Убийство" if e.get("Killer", {}).get("GuildId") == GUILD_ID else "💀 Смерть"
-    embed = discord.Embed(title=title, color=0x8e44ad)
-    embed.add_field(name="Killer", value=e.get("Killer", {}).get("Name", "Unknown"), inline=False)
-    embed.add_field(name="Victim", value=e.get("Victim", {}).get("Name", "Unknown"), inline=False)
+    title = "☠️ Убийство" if last_event.get("Killer", {}).get("GuildId") == GUILD_ID else "💀 Смерть"
+    embed = create_battle_embed(last_event, title, 0x8e44ad)
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -131,9 +178,9 @@ async def help(ctx):
     """Список всех команд"""
     msg = """**Доступные команды бота:**
 `!guild` - Полная статистика гильдии + настройки каналов
-`!testkill` - Отправить тестовое убийство в килл-борд
-`!testdeath` - Отправить тестовую смерть в дед-борд
-`!last` - Показать последнее реальное событие из игры
+`!testkill` - Тестовое убийство (проверка урона/отхила)
+`!testdeath` - Тестовая смерть (проверка урона врагов)
+`!last` - Показать последнее реальное событие с DMG/HEAL
 `!kb` - Ссылка на официальный киллборд
 `!ping` - Проверить, живой ли бот
 `!help` - Показать это сообщение"""
@@ -158,23 +205,14 @@ async def monitor():
                 
                 last_event = event
                 
-                killer = event.get("Killer", {})
-                victim = event.get("Victim", {})
-                fame = event.get("TotalVictimKillFame", 0)
-                
-                embed = discord.Embed(color=0x8e44ad)
-                embed.add_field(name="Killer", value=killer.get("Name", "Unknown"), inline=False)
-                embed.add_field(name="Victim", value=victim.get("Name", "Unknown"), inline=False)
-                embed.add_field(name="Fame", value=f"{fame:,}", inline=False)
-
                 if result == "kill":
-                    embed.title = "☠️ УБИЙСТВО"
+                    embed = create_battle_embed(event, "☠️ УБИЙСТВО", 0x2ecc71)
                     if kill_ch: await kill_ch.send(embed=embed)
                 elif result == "death":
-                    embed.title = "💀 СМЕРТЬ"
+                    embed = create_battle_embed(event, "💀 СМЕРТЬ", 0xe74c3c)
                     if death_ch: await death_ch.send(embed=embed)
                 elif result == "assist":
-                    embed.title = "🤝 АССИСТ"
+                    embed = create_battle_embed(event, "🤝 АССИСТ", 0x3498db)
                     if kill_ch: await kill_ch.send(embed=embed)
         except Exception as e:
             print(f"Ошибка в мониторинге: {e}")
