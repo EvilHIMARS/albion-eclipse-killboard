@@ -1,8 +1,9 @@
+
 import os
 import asyncio
 import discord
 
-from dotenv import load_dotenv
+from keep_alive import keep_alive
 
 from albion_api import get_events
 from tracker import is_guild_kill
