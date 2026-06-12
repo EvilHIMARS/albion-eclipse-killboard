@@ -170,7 +170,7 @@ async def checkapi(ctx):
 
 @bot.command()
 async def guild(ctx):
-    """Повна інформація про гільдію та налаштування каналів бота"""
+    """Повна інформація про гільдію та налаштування навколишнього середовища"""
     data = await get_guild_info(GUILD_ID)
     if not data:
         await ctx.send("❌ Не вдалося отримати дані гільдії від API Albion.")
@@ -237,7 +237,7 @@ async def help(ctx):
 `!help` - Посилання на команди"""
     await ctx.send(msg)
 
-# --- МОНІТОРИНГ ЗІ ЗБІЛЬШЕНИМ ЛІМІТОМ ДО 100 ПОДІЙ ---
+# --- МОНІТОРИНГ З АВТОМАТИЧНИМ ЛОГУВАННЯМ КРОКІВ ---
 async def monitor():
     global last_event
     await bot.wait_until_ready()
@@ -246,27 +246,40 @@ async def monitor():
 
     while not bot.is_closed():
         try:
-            # Забираємо ТОР-100 подій кожні 30 секунд, щоб перекрити весь прайм-тайм
             events = await get_events(limit=100)
-            for event in events:
-                if event["EventId"] in processed: continue
-                processed.add(event["EventId"])
+            
+            if not events or not isinstance(events, list):
+                print("[MONITOR] Попередження: Сервер Альбіону повернув порожній список логів.")
+            else:
+                guild_activity_found = False
                 
-                result = is_guild_kill(event)
-                if not result: continue
+                for event in events:
+                    if event["EventId"] in processed: continue
+                    processed.add(event["EventId"])
+                    
+                    result = is_guild_kill(event)
+                    if not result: continue
+                    
+                    guild_activity_found = True
+                    last_event = event
+                    
+                    if result == "kill":
+                        embed = create_battle_embed(event, "☠️ ВБИВСТВО", 0x2ecc71)
+                        if kill_ch: await kill_ch.send(embed=embed)
+                    elif result == "death":
+                        embed = create_battle_embed(event, "💀 СМЕРТЬ", 0xe74c3c)
+                        if death_ch: await death_ch.send(embed=embed)
+                    elif result == "assist":
+                        embed = create_battle_embed(event, "🤝 АСИСТ ГІЛЬДІЇ", 0x3498db)
+                        if kill_ch: await kill_ch.send(embed=embed)
                 
-                last_event = event
-                if result == "kill":
-                    embed = create_battle_embed(event, "☠️ ВБИВСТВО", 0x2ecc71)
-                    if kill_ch: await kill_ch.send(embed=embed)
-                elif result == "death":
-                    embed = create_battle_embed(event, "💀 СМЕРТЬ", 0xe74c3c)
-                    if death_ch: await death_ch.send(embed=embed)
-                elif result == "assist":
-                    embed = create_battle_embed(event, "🤝 АСИСТ ГІЛЬДІЇ", 0x3498db)
-                    if kill_ch: await kill_ch.send(embed=embed)
+                # Якщо за цей цикл у 100 логах не було ваших бійців, пишемо звіт у консоль
+                if not guild_activity_found:
+                    print(f"[MONITOR] Успішно перевірено {len(events)} подій у світі. Нових боїв гільдії x E C L I P S E x не знайдено.")
+                    
         except Exception as e:
-            print(f"Помилка моніторингу: {e}")
+            print(f"[MONITOR ERROR] Критична помилка під час перевірки: {e}")
+            
         await asyncio.sleep(30)
 
 @bot.event
