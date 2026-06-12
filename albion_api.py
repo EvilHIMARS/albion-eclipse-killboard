@@ -3,17 +3,18 @@ import logging
 
 logger = logging.getLogger("AlbionBot.API")
 
-# Головний офіційний хост
-BASE_URL = "https://gameinfo.albiononline.com/api/gameinfo"
+# Справжній офіційний шлюз для сервера Albion Europe (скорочено 'ams')
+# Тепер Render точно знайде цей домен, і ми будемо читати саме європейські бої
+BASE_URL = "https://gameinfo-ams.albiononline.com/api/gameinfo"
 
 async def get_events(limit=20):
-    """Отримує свіжі події з правильними параметрами сортування, щоб уникнути помилки 400"""
+    """Отримує свіжі події з європейського сервера Albion Europe"""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
-    # Додаємо обов'язкові для цього сервера параметри offset та sort
-    url = f"{BASE_URL}/events?limit={limit}&offset=0&sort=desc"
+    # Стандартний чистий запит для європейського API
+    url = f"{BASE_URL}/events?limit={limit}&offset=0"
     
     try:
         async with aiohttp.ClientSession() as session:
@@ -24,14 +25,14 @@ async def get_events(limit=20):
                         return data
                     return []
                 else:
-                    logger.warning(f"[API MAIN] Сервер повернув статус {response.status}. Пропуск.")
+                    logger.warning(f"[API EUROPE] Сервер повернув статус {response.status}. Пропуск.")
                     return []
     except Exception as e:
-        logger.error(f"[API MAIN ERROR] Помилка підключення до головного сервера: {e}")
+        logger.error(f"[API EUROPE ERROR] Помилка підключення до європейського сервера: {e}")
         return []
 
 async def get_guild_info(guild_id):
-    """Отримує інформацію про гільдію"""
+    """Отримує інформацію про гільдію з європейського сервера"""
     if not guild_id:
         return None
         
