@@ -27,10 +27,9 @@ DEATH_CHANNEL = int(os.getenv("DEATH_CHANNEL_ID"))
 
 intents = discord.Intents.default()
 intents.message_content = True 
-bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Удаляем стандартный хелп, чтобы не было конфликта
-bot.remove_command('help')
+# Отключаем встроенный хелп прямо здесь с помощью help_command=None
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 last_event = None
 processed = set()
