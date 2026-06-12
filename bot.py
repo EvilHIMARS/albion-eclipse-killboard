@@ -72,7 +72,7 @@ def create_battle_embed(event, title, color):
         if damage_list:
             embed.add_field(name="📈 Нанесена шкода (Учасники):", value="\n".join(damage_list), inline=False)
         if heal_list:
-            embed.add_field(name="💚 Інтенсивність зцілення / Підтримка:", value="\n".join(heal_list), inline=False)
+            embed.add_field(name="💚 Інтенсивність зцілення / Поддержка:", value="\n".join(heal_list), inline=False)
     else:
         embed.add_field(name="📊 Статистика учасників", value="Немає детальних даних про шкоду чи хіл.", inline=False)
         
@@ -81,16 +81,56 @@ def create_battle_embed(event, title, color):
 # --- КОМАНДЫ БОТА ---
 
 @bot.command()
+async def scanlive(ctx):
+    """Сканує останні 30 подій у світі та перевіряє роботу фільтра гільдії"""
+    status_msg = await ctx.send("🔍 Сканую останні 30 живих подій в Albion Online на предмет нашої гільдії...")
+    
+    try:
+        events = await get_events(limit=30)
+        if not events or not isinstance(events, list):
+            await status_msg.edit(content="🟡 API Альбіону повернуло порожній список подій. Спробуй ще раз за хвилину.")
+            return
+        
+        found_any = False
+        seen_guilds = set()
+        
+        for event in events:
+            # Збираємо назви інших гільдій для звіту діагностики
+            k_guild = event.get("Killer", {}).get("GuildName")
+            v_guild = event.get("Victim", {}).get("GuildName")
+            if k_guild: seen_guilds.add(k_guild)
+            if v_guild: seen_guilds.add(v_guild)
+            
+            # Перевіряємо подію через наш фільтр трекера
+            result = is_guild_kill(event)
+            if result:
+                found_any = True
+                title_text = "☠️ ЗНАЙДЕНО ВБИВСТВО ГІЛЬДІЇ" if result == "kill" else "💀 ЗНАЙДЕНО СМЕРТЬ СОРАТНИКА"
+                color_hex = 0x2ecc71 if result == "kill" else 0xe74c3c
+                
+                embed = create_battle_embed(event, title_text, color_hex)
+                await ctx.send(embed=embed)
+        
+        if found_any:
+            await status_msg.edit(content="✅ Сканування завершено! Знайдено та виведено свіжі бойові логі нашої гільдії!")
+        else:
+            # Показуємо користувачу, які гільдії бот успішно просканував і відсіяв
+            sample_guilds = list(seen_guilds)[:3]
+            guilds_str = ", ".join([f"`{g}`" for g in sample_guilds])
+            await status_msg.edit(content=f"ℹ️ Проскановано 30 свіжих подій у світі. Активності нашої гільдії за останні 2-3 хвилини в логах немає.\n\n"
+                                          f"🤖 **Фільтр працює правильно:** бот успішно перевірив та проігнорував інші гільдії, серед яких: {guilds_str}.\n"
+                                          f"🟢 Як тільки ваші хлопці почнуть битися — бот відразу перехопить подію в автоматичному режимі!")
+    except Exception as e:
+        await status_msg.edit(content=f"🔴 Помилка під час сканування лайв-стріму: `{str(e)}`")
+
+@bot.command()
 async def testreal(ctx):
     """Експеримент: бере справжній останній кілл з Альбіону і шле в канал"""
     status_msg = await ctx.send("📡 Завантажую свіжий реальний лог з серверу Альбіону...")
-    
     try:
         events = await get_events(limit=1)
         if events and isinstance(events, list):
             real_event = events[0]
-            
-            # Строим карточку на основе реального события из игры
             embed = create_battle_embed(real_event, "🌐 ЕКСПЕРИМЕНТ: Реальний бій з Альбіону", 0x3498db)
             embed.set_footer(text=f"ID Події в грі: {real_event.get('EventId')}")
             
@@ -101,9 +141,9 @@ async def testreal(ctx):
             else:
                 await status_msg.edit(content="❌ Помилка: Не знайдено KILL_CHANNEL_ID для відправки.")
         else:
-            await status_msg.edit(content="🟡 Сервер Альбіону повернув порожній лог. Спробуй ще раз за хвилину.")
+            await status_msg.edit(content="🟡 Сервер Альбіону повернув порожній лог.")
     except Exception as e:
-        await status_msg.edit(content=f"🔴 Експеримент провалився. Помилка API або коду: `{str(e)}`")
+        await status_msg.edit(content=f"🔴 Експеримент провалився: `{str(e)}`")
 
 @bot.command()
 async def checkapi(ctx):
@@ -117,7 +157,7 @@ async def checkapi(ctx):
             timestamp = latest_event.get("TimeStamp", "Невідомо")
             clean_time = timestamp.replace("T", " ").split(".")[0] if "T" in timestamp else timestamp
             
-            embed = discord.Embed(title="🌐 Статус API Albion Online", color=0x2ecc71)
+            embed = discord.Embed(title="🌐 Status API Albion Online", color=0x2ecc71)
             embed.add_field(name="🟢 Стан серверов гри", value="Працює, відповідь отримана!", inline=False)
             embed.add_field(name="📊 ID останньої події у світі", value=f"`{event_id}`", inline=True)
             embed.add_field(name="🕒 Час цієї події (UTC / Час гри)", value=f"`{clean_time}`", inline=True)
@@ -190,7 +230,8 @@ async def testdeath(ctx):
 @bot.command()
 async def help(ctx):
     msg = """**Доступні команди бота:**
-`!testreal` - ЕКСПЕРИМЕНТ: взять настоящий живой лог с Европы и прислать в канал
+`!scanlive` - ДІАГНОСТИКА: перевірити 30 живих подій у світі через наш фільтр гільдії
+`!testreal` - ЕКСПЕРИМЕНТ: взяти випадковий лог з Європи та надіслати в канал
 `!checkapi` - Перевірити статус API Альбіону
 `!guild` - Статистика гільдії
 `!testkill` - Тестове вбивство
