@@ -277,10 +277,13 @@ async def on_ready():
     logger.info("=" * 50)
     
     logger.info("🔧 [DISCORD] Доступні команди бота:")
+    logger.info("   !info      — Повний список команд бота з описом")
     logger.info("   !checkapi  — Перевірка статусу API Albion Online")
-    logger.info("   !guild     — Статистика гільдії")
-    logger.info("   !status    — Статус моніторингу бота")
-    logger.info("   !help      — Список всіх команд")
+    logger.info("   !guild     — Статистика гільдії з офіційного API")
+    logger.info("   !status    — Статус моніторингу бота (цикли, події, кеш)")
+    logger.info("   !scan      — Глибоке сканування 100 останніх подій на кіли/смерті гільдії")
+    logger.info("   !lastkills — Показати останні кіли/смерті зі світового логу")
+    logger.info("   !help      — Короткий список команд")
     
     bot.loop.create_task(monitor_loop())
 
@@ -359,15 +362,183 @@ async def status(ctx):
     await ctx.send(embed=embed)
 
 @bot.command()
+async def scan(ctx):
+    """Глибоке сканування 100 останніх подій — шукає кіли/смерті гільдії"""
+    logger.info(f"🔧 [КОМАНДА] !scan від {ctx.author}")
+    status_msg = await ctx.send("🔍 **Глибоке сканування:** перевіряю 100 останніх подій в Albion Europe...")
+
+    try:
+        events = await get_events(limit=100)
+        if not events or not isinstance(events, list):
+            logger.warning("[КОМАНДА] !scan — API повернув порожній список")
+            await status_msg.edit(content="🟡 API Альбіону повернув порожній список подій. Спробуй пізніше.")
+            return
+
+        found_kills = 0
+        found_deaths = 0
+        found_assists = 0
+        seen_guilds = set()
+
+        for event in events:
+            k_guild = (event.get("Killer") or {}).get("GuildName")
+            v_guild = (event.get("Victim") or {}).get("GuildName")
+            if k_guild:
+                seen_guilds.add(k_guild)
+            if v_guild:
+                seen_guilds.add(v_guild)
+
+            result = is_guild_kill(event)
+            if not result:
+                continue
+
+            if result == "kill":
+                found_kills += 1
+                embed = create_battle_embed(event, "☠️ ЗНАЙДЕНО ВБИВСТВО ГІЛЬДІЇ (СКАН)", 0x2ecc71)
+            elif result == "death":
+                found_deaths += 1
+                embed = create_battle_embed(event, "💀 ЗНАЙДЕНО СМЕРТЬ СОРАТНИКА (СКАН)", 0xe74c3c)
+            elif result == "assist":
+                found_assists += 1
+                embed = create_battle_embed(event, "🤝 ЗНАЙДЕНО АСИСТ ГІЛЬДІЇ (СКАН)", 0x3498db)
+            else:
+                continue
+            await ctx.send(embed=embed)
+
+        total_found = found_kills + found_deaths + found_assists
+        if total_found > 0:
+            logger.info(f"✅ [КОМАНДА] !scan — знайдено {total_found} подій гільдії (kills: {found_kills}, deaths: {found_deaths}, assists: {found_assists})")
+            await status_msg.edit(
+                content=f"✅ **Сканування завершено!** Знайдено **{total_found}** подій гільдії:\n"
+                        f"⚔️ Вбивств: **{found_kills}** | 💀 Смертей: **{found_deaths}** | 🤝 Асистів: **{found_assists}**"
+            )
+        else:
+            sample_guilds = list(seen_guilds)[:5]
+            guilds_str = ", ".join([f"`{g}`" for g in sample_guilds]) if sample_guilds else "немає даних"
+            logger.info(f"[КОМАНДА] !scan — подій гільдії не знайдено серед {len(events)} подій")
+            await status_msg.edit(
+                content=f"ℹ️ Проскановано **{len(events)}** глобальних подій. Подій нашої гільдії не знайдено.\n\n"
+                        f"⚙️ **Фільтр працює:** бот відсіяв інші гільдії, наприклад: {guilds_str}\n"
+                        f"🟢 Моніторинг продовжує працювати — нові бої будуть виявлені автоматично."
+            )
+    except Exception as e:
+        logger.error(f"❌ [КОМАНДА] !scan — збій: {e}")
+        await status_msg.edit(content=f"🔴 **Помилка сканування:** `{str(e)}`")
+
+@bot.command()
+async def lastkills(ctx, count: int = 10):
+    """Показує останні кіли/смерті зі світового логу Albion (без фільтру гільдії)"""
+    logger.info(f"🔧 [КОМАНДА] !lastkills (count={count}) від {ctx.author}")
+    count = max(1, min(count, 20))
+
+    try:
+        events = await get_events(limit=count)
+        if not events or not isinstance(events, list):
+            await ctx.send("🟡 API Альбіону повернув порожній список.")
+            return
+
+        logger.info(f"✅ [КОМАНДА] !lastkills — отримано {len(events)} подій зі світового логу")
+        await ctx.send(f"🌍 **Останні {len(events)} подій зі світового логу Albion Online:**")
+
+        for event in events[:count]:
+            killer = (event.get("Killer") or {}).get("Name", "?")
+            killer_guild = (event.get("Killer") or {}).get("GuildName") or "Без гільдії"
+            victim = (event.get("Victim") or {}).get("Name", "?")
+            victim_guild = (event.get("Victim") or {}).get("GuildName") or "Без гільдії"
+            fame = event.get("TotalVictimKillFame", 0)
+            event_id = event.get("EventId", "?")
+
+            embed = discord.Embed(
+                title=f"🌐 Світова подія #{event_id}",
+                url=f"https://albiononline.com/killboard/kill/{event_id}",
+                color=0x95a5a6
+            )
+            embed.add_field(name="⚔️ Вбивця", value=f"**{killer}** `[{killer_guild}]`", inline=True)
+            embed.add_field(name="💀 Жертва", value=f"**{victim}** `[{victim_guild}]`", inline=True)
+            embed.add_field(name="✨ Fame", value=f"**{fame:,}**", inline=True)
+            await ctx.send(embed=embed)
+
+    except Exception as e:
+        logger.error(f"❌ [КОМАНДА] !lastkills — збій: {e}")
+        await ctx.send(f"🔴 **Помилка:** `{str(e)}`")
+
+@bot.command()
+async def info(ctx):
+    """Повний список команд бота з детальним описом"""
+    logger.info(f"🔧 [КОМАНДА] !info від {ctx.author}")
+    embed = discord.Embed(
+        title="📖 x E C L I P S E x — Killboard Bot",
+        description="Бот автоматично моніторить Albion Online API кожні 30 секунд та відправляє сповіщення про вбивства, смерті та асисти гільдії у відповідні канали Discord.",
+        color=0xf39c12
+    )
+
+    embed.add_field(
+        name="🔍 !scan",
+        value="**Глибоке сканування.** Залазить в логи Albion API та перевіряє 100 останніх подій. "
+              "Шукає вбивства, смерті та асисти гільдії. Все знайдене відправляє прямо в чат з детальними картками бою.",
+        inline=False
+    )
+    embed.add_field(
+        name="🌍 !lastkills [кількість]",
+        value="**Світовий лог.** Витягує останні кіли зі всього серверу Albion Europe (без фільтру гільдії). "
+              "Показує хто кого вбив, з якої гільдії, та скільки Fame. За замовчуванням 10 подій, максимум 20.\n"
+              "Приклад: `!lastkills 5`",
+        inline=False
+    )
+    embed.add_field(
+        name="🌐 !checkapi",
+        value="**Перевірка API.** Відправляє тестовий запит до серверів Albion Online та показує статус з'єднання, "
+              "ID останньої події та час.",
+        inline=False
+    )
+    embed.add_field(
+        name="🏰 !guild",
+        value="**Статистика гільдії.** Витягує з API повну інформацію: лідер, кількість учасників, альянс, "
+              "PvP Kill Fame, PvP Death Fame, та показує в які канали бот відправляє звіти.",
+        inline=False
+    )
+    embed.add_field(
+        name="📊 !status",
+        value="**Статус моніторингу.** Показує скільки циклів опитування пройшло, скільки подій проскановано, "
+              "скільки подій гільдії знайдено, стан кешу дублікатів, налаштування інтервалу та каналів.",
+        inline=False
+    )
+    embed.add_field(
+        name="📋 !help",
+        value="**Короткий список.** Показує всі команди одним рядком.",
+        inline=False
+    )
+    embed.add_field(
+        name="📖 !info",
+        value="**Ця сторінка.** Повний список команд з детальним описом кожної.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="⚙️ Як працює автоматичний моніторинг?",
+        value="Бот кожні **30 секунд** відправляє запит до Albion API та отримує **100 останніх подій** у світі. "
+              "Потім фільтрує їх по ID гільдії та відправляє:\n"
+              "• ☠️ **Вбивства** → канал вбивств\n"
+              "• 💀 **Смерті** → канал смертей\n"
+              "• 🤝 **Асисти** → канал вбивств\n"
+              "Захист від дублікатів: бот запам'ятовує EventId та не відправляє одну подію двічі.",
+        inline=False
+    )
+
+    embed.set_footer(text="Бот моніторить Albion API 24/7 | Розробник: EvilHIMARS")
+    await ctx.send(embed=embed)
+
+@bot.command()
 async def help(ctx):
-    """Список усіх команд бота"""
+    """Короткий список команд бота"""
     logger.info(f"🔧 [КОМАНДА] !help від {ctx.author}")
     embed = discord.Embed(title="📋 Команди бота x E C L I P S E x", color=0xf39c12)
-    embed.add_field(name="!checkapi", value="Перевірити статус та з'єднання з API Albion Online", inline=False)
-    embed.add_field(name="!guild", value="Повна статистика гільдії: учасники, fame, альянс, канали бота", inline=False)
-    embed.add_field(name="!status", value="Статус моніторингу: скільки циклів, подій, стан кешу", inline=False)
-    embed.add_field(name="!help", value="Цей список команд", inline=False)
-    embed.set_footer(text="Бот моніторить Albion API кожні 30 секунд | Розробник: EvilHIMARS")
+    embed.add_field(name="!info", value="📖 Повний список команд з детальним описом", inline=False)
+    embed.add_field(name="!scan", value="🔍 Глибоке сканування 100 подій — пошук кілів/смертей гільдії", inline=False)
+    embed.add_field(name="!lastkills [n]", value="🌍 Останні n кілів зі світового логу (за замовч. 10, макс. 20)", inline=False)
+    embed.add_field(name="!checkapi", value="🌐 Перевірка з'єднання з API Albion Online", inline=False)
+    embed.add_field(name="!guild", value="🏰 Статистика гільдії: учасники, fame, альянс", inline=False)
+    embed.add_field(name="!status", value="📊 Статус моніторингу: цикли, події, кеш", inline=False)
+    embed.set_footer(text="Напиши !info для детального опису кожної команди | Розробник: EvilHIMARS")
     await ctx.send(embed=embed)
 
 # Запуск всієї екосистеми
