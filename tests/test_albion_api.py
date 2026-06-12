@@ -2,7 +2,7 @@ import pytest
 from asyncio import TimeoutError
 from aioresponses import aioresponses
 
-from albion_api import get_events, get_guild_info, BASE_URL
+from api_client import get_events, get_guild_info, BASE_URL
 
 
 @pytest.fixture

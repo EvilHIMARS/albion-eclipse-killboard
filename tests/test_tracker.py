@@ -1,4 +1,3 @@
-import os
 import pytest
 from tracker import is_guild_kill
 

@@ -1,6 +1,5 @@
-import sys
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 
 # Patch Bot.run so the module-level ``bot.run(TOKEN)`` is a no-op.
 with patch("discord.ext.commands.Bot.run"):
@@ -151,8 +150,9 @@ class TestDispatchEvent:
     async def test_kill_event_sends_to_kill_channel(self):
         kill_ch = AsyncMock()
         death_ch = AsyncMock()
+        channels = {"kill": kill_ch, "death": death_ch}
         event = _full_event()
-        await dispatch_event(event, "kill", kill_ch, death_ch)
+        await dispatch_event(event, "kill", channels)
         kill_ch.send.assert_awaited_once()
         death_ch.send.assert_not_awaited()
 
@@ -160,8 +160,9 @@ class TestDispatchEvent:
     async def test_death_event_sends_to_death_channel(self):
         kill_ch = AsyncMock()
         death_ch = AsyncMock()
+        channels = {"kill": kill_ch, "death": death_ch}
         event = _full_event()
-        await dispatch_event(event, "death", kill_ch, death_ch)
+        await dispatch_event(event, "death", channels)
         death_ch.send.assert_awaited_once()
         kill_ch.send.assert_not_awaited()
 
@@ -169,31 +170,35 @@ class TestDispatchEvent:
     async def test_assist_event_sends_to_kill_channel(self):
         kill_ch = AsyncMock()
         death_ch = AsyncMock()
+        channels = {"kill": kill_ch, "death": death_ch}
         event = _full_event()
-        await dispatch_event(event, "assist", kill_ch, death_ch)
+        await dispatch_event(event, "assist", channels)
         kill_ch.send.assert_awaited_once()
         death_ch.send.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_send_when_kill_channel_is_none(self):
         death_ch = AsyncMock()
+        channels = {"kill": None, "death": death_ch}
         event = _full_event()
-        await dispatch_event(event, "kill", None, death_ch)
+        await dispatch_event(event, "kill", channels)
         death_ch.send.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_send_when_death_channel_is_none(self):
         kill_ch = AsyncMock()
+        channels = {"kill": kill_ch, "death": None}
         event = _full_event()
-        await dispatch_event(event, "death", kill_ch, None)
+        await dispatch_event(event, "death", channels)
         kill_ch.send.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_unknown_result_type_sends_nothing(self):
         kill_ch = AsyncMock()
         death_ch = AsyncMock()
+        channels = {"kill": kill_ch, "death": death_ch}
         event = _full_event()
-        await dispatch_event(event, "unknown", kill_ch, death_ch)
+        await dispatch_event(event, "unknown", channels)
         kill_ch.send.assert_not_awaited()
         death_ch.send.assert_not_awaited()
 
@@ -201,14 +206,16 @@ class TestDispatchEvent:
     async def test_dispatch_handles_send_exception(self):
         kill_ch = AsyncMock()
         kill_ch.send.side_effect = Exception("Discord API error")
+        channels = {"kill": kill_ch, "death": None}
         event = _full_event()
         # Should not raise
-        await dispatch_event(event, "kill", kill_ch, None)
+        await dispatch_event(event, "kill", channels)
 
     @pytest.mark.asyncio
     async def test_embed_passed_to_channel(self):
         kill_ch = AsyncMock()
+        channels = {"kill": kill_ch, "death": None}
         event = _full_event()
-        await dispatch_event(event, "kill", kill_ch, None)
+        await dispatch_event(event, "kill", channels)
         call_kwargs = kill_ch.send.call_args
         assert "embed" in call_kwargs.kwargs
