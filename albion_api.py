@@ -3,16 +3,17 @@ import logging
 
 logger = logging.getLogger("AlbionBot.API")
 
-# Головний, залізобетонний офіційний хост Альбіону, який Render точно бачить
+# Головний офіційний хост
 BASE_URL = "https://gameinfo.albiononline.com/api/gameinfo"
 
 async def get_events(limit=20):
-    """Отримує свіжі події з головного стабільного шлюзу Albion"""
+    """Отримує свіжі події з правильними параметрами сортування, щоб уникнути помилки 400"""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    # Знижуємо ліміт за замовчуванням до 20, щоб сервер віддавав інфу миттєво
-    url = f"{BASE_URL}/events?limit={limit}"
+    
+    # Додаємо обов'язкові для цього сервера параметри offset та sort
+    url = f"{BASE_URL}/events?limit={limit}&offset=0&sort=desc"
     
     try:
         async with aiohttp.ClientSession() as session:
