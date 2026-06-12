@@ -29,6 +29,9 @@ intents = discord.Intents.default()
 intents.message_content = True 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Удаляем стандартный хелп, чтобы не было конфликта
+bot.remove_command('help')
+
 last_event = None
 processed = set()
 
@@ -78,11 +81,11 @@ async def kb(ctx):
 async def help(ctx):
     """Список команд"""
     msg = """**Команды бота:**
-    `!guild` - Статистика гильдии
-    `!last` - Последнее событие
-    `!ping` - Задержка бота
-    `!kb` - Ссылка на киллборд
-    `!help` - Эта справка"""
+`!guild` - Статистика гильдии
+`!last` - Последнее событие
+`!ping` - Задержка бота
+`!kb` - Ссылка на киллборд
+`!help` - Эта справка"""
     await ctx.send(msg)
 
 # --- МОНИТОРИНГ ---
@@ -102,11 +105,28 @@ async def monitor():
                 result = is_guild_kill(event)
                 if not result: continue
                 
-                last_event = event # Обновляем глобальную переменную
+                last_event = event
                 
-                # Код для отправки уведомлений в каналы...
-                # (оставьте вашу старую логику отправки embed здесь)
-        except: pass
+                killer = event.get("Killer", {})
+                victim = event.get("Victim", {})
+                fame = event.get("TotalVictimKillFame", 0)
+                
+                embed = discord.Embed(color=0x8e44ad)
+                embed.add_field(name="Killer", value=killer.get("Name", "Unknown"), inline=False)
+                embed.add_field(name="Victim", value=victim.get("Name", "Unknown"), inline=False)
+                embed.add_field(name="Fame", value=f"{fame:,}", inline=False)
+
+                if result == "kill":
+                    embed.title = "☠️ УБИЙСТВО"
+                    if kill_ch: await kill_ch.send(embed=embed)
+                elif result == "death":
+                    embed.title = "💀 СМЕРТЬ"
+                    if death_ch: await death_ch.send(embed=embed)
+                elif result == "assist":
+                    embed.title = "🤝 АССИСТ"
+                    if kill_ch: await kill_ch.send(embed=embed)
+        except Exception as e:
+            print(f"Ошибка: {e}")
         await asyncio.sleep(30)
 
 @bot.event
