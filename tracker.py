@@ -1,4 +1,8 @@
 import os
+import logging
+
+logger = logging.getLogger("AlbionBot.Tracker")
+
 
 def is_guild_kill(event):
     """
@@ -6,15 +10,15 @@ def is_guild_kill(event):
     Бере GUILD_ID прямо під час виклику, щоб уникнути багів з імпортами.
     """
     guild_id = os.getenv("GUILD_ID")
-    
+
     if not guild_id:
-        print("[TRACKER ERROR] GUILD_ID не знайдено в змінних оточення!")
+        logger.error("GUILD_ID не знайдено в змінних оточення!")
         return None
 
     # Отримуємо дані вбивці та жертви
     killer = event.get("Killer") or {}
     victim = event.get("Victim") or {}
-    
+
     killer_guild = killer.get("GuildId")
     victim_guild = victim.get("GuildId")
 
