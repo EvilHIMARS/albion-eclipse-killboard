@@ -75,7 +75,47 @@ def create_battle_embed(event, title, color):
         
     return embed
 
-# --- КОМАНДИ БОТА ---
+# --- КОМАНДЫ БОТА ---
+
+@bot.command()
+async def checkapi(ctx):
+    """Перевірка працездатності та затримок офіційного API Albion Online"""
+    status_msg = await ctx.send("🔍 Зв'язуюся з серверами Albion Online API, зачекайте...")
+    
+    try:
+        # Робимо запит на отримання 1 найсвіжішої події у грі
+        events = await get_events(limit=1)
+        
+        if events and isinstance(events, list):
+            latest_event = events[0]
+            event_id = latest_event.get("EventId", "Невідомо")
+            timestamp = latest_event.get("TimeStamp", "Невідомо")
+            
+            # Очищаємо хвостик часу для красивого відображення (зазвичай там йде YYYY-MM-DDTHH:MM:SS)
+            clean_time = timestamp.replace("T", " ").split(".")[0] if "T" in timestamp else timestamp
+            
+            embed = discord.Embed(title="🌐 Статус API Albion Online", color=0x2ecc71)
+            embed.add_field(name="🟢 Стан серверов гри", value="Працює, відповідь отримана!", inline=False)
+            embed.add_field(name="📊 ID останньої події у світі", value=f"`{event_id}`", inline=True)
+            embed.add_field(name="🕒 Час цієї події (UTC / Час гри)", value=f"`{clean_time}`", inline=True)
+            embed.set_footer(text="💡 Порівняй час гри з поточним. Якщо різниця велика — API працює із затримкою.")
+            
+            await status_msg.delete()
+            await ctx.send(embed=embed)
+        else:
+            embed = discord.Embed(title="🌐 Статус API Albion Online", color=0xf1c40f)
+            embed.add_field(name="🟡 Попередження", value="Сервер відповів, але надіслав порожній список подій. Можливо, ведуться технічні роботи.", inline=False)
+            await status_msg.delete()
+            await ctx.send(embed=embed)
+            
+    except Exception as e:
+        embed = discord.Embed(title="🌐 Статус API Albion Online", color=0xe74c3c)
+        embed.add_field(name="🔴 Помилка зв'язку", value="Офіційне API Альбіону зараз **ПОВНІСТЮ ЛЕЖИТЬ** або скидає з'єднання через перевантаження серверів.", inline=False)
+        embed.add_field(name="🪲 Технічна помилка", value=f"`{str(e)}`", inline=False)
+        embed.set_footer(text="Бот автоматично продовжить роботу, щойно сервери Albion відновлять роботу.")
+        
+        await status_msg.delete()
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def guild(ctx):
@@ -113,7 +153,6 @@ async def testkill(ctx):
         await ctx.send("❌ Помилка: Канал для вбивств не знайдено.")
         return
     
-    # Штучний лог події з гільдіями для кожного учасника
     mock_event = {
         "TotalVictimKillFame": 350000,
         "Killer": {"Name": "Вбивця_з_Eclipse", "GuildName": "x E C L I P S E x"},
@@ -160,7 +199,7 @@ async def testdeath(ctx):
 async def last(ctx):
     """Остання реальна подія зафіксована ботом"""
     if not last_event:
-        await ctx.send("Реальних подій з моменту запуску бота ще не було зафіксовано.")
+        await ctx.send("Реальних подій з моменту запуска бота ще не було зафіксовано.")
         return
     
     title = "☠️ Вбивство" if last_event.get("Killer", {}).get("GuildId") == GUILD_ID else "💀 Смерть"
@@ -182,6 +221,7 @@ async def kb(ctx):
 async def help(ctx):
     """Список усіх доступних команд"""
     msg = """**Доступні команди бота (Українською):**
+`!checkapi` - Перевірити, чи працює зараз API Альбіону (чи є затримки серверов)
 `!guild` - Повна статистика нашої гільдії та налаштування каналів
 `!testkill` - Тестове вбивство (перевірка відображення гільдій учасників)
 `!testdeath` - Тестова смерть (перевірка логу шкоди від ворогів)
