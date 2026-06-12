@@ -24,12 +24,12 @@ logger = logging.getLogger("AlbionBot")
 app = Flask('')
 @app.route('/')
 def home(): 
-    return "Бот активний і здійснює моніторинг логів!"
+    return "OK"
 
 def run_server():
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
-    app.run(host='0.0.0.0', port=10000)
+    app.run(host='127.0.0.1', port=10000)
 
 def keep_alive():
     t = Thread(target=run_server)
@@ -289,6 +289,7 @@ async def on_ready():
     bot.loop.create_task(monitor_loop())
 
 @bot.command()
+@commands.has_permissions(manage_messages=True)
 async def checkapi(ctx):
     """Перевірка доступності шлюзу Albion"""
     logger.info(f"🔧 [КОМАНДА] !checkapi від {ctx.author}")
@@ -310,9 +311,10 @@ async def checkapi(ctx):
             await ctx.send("🟡 **API повернуло порожній масив даних.** Можливо сервери гри перевантажені.")
     except Exception as e:
         logger.error(f"❌ [КОМАНДА] !checkapi — збій: {e}")
-        await ctx.send(f"🔴 **Помилка з'єднання з API:** `{str(e)}`")
+        await ctx.send("🔴 **Помилка з'єднання з API.** Спробуйте пізніше.")
 
 @bot.command()
+@commands.has_permissions(manage_messages=True)
 async def guild(ctx):
     """Повна інформація про гільдію"""
     logger.info(f"🔧 [КОМАНДА] !guild від {ctx.author}")
@@ -340,6 +342,7 @@ async def guild(ctx):
     await ctx.send(embed=embed)
 
 @bot.command()
+@commands.has_permissions(manage_messages=True)
 async def status(ctx):
     """Статус моніторингу бота"""
     logger.info(f"🔧 [КОМАНДА] !status від {ctx.author}")
@@ -363,6 +366,7 @@ async def status(ctx):
     await ctx.send(embed=embed)
 
 @bot.command()
+@commands.has_permissions(manage_messages=True)
 async def scan(ctx):
     """Глибоке сканування 51 останню подій — шукає кіли/смерті гільдії"""
     logger.info(f"🔧 [КОМАНДА] !scan від {ctx.author}")
@@ -423,9 +427,10 @@ async def scan(ctx):
             )
     except Exception as e:
         logger.error(f"❌ [КОМАНДА] !scan — збій: {e}")
-        await status_msg.edit(content=f"🔴 **Помилка сканування:** `{str(e)}`")
+        await status_msg.edit(content="🔴 **Помилка сканування.** Спробуйте пізніше.")
 
 @bot.command()
+@commands.has_permissions(manage_messages=True)
 async def scanlive(ctx):
     """Сканування 20 останніх подій (компактний формат)"""
     logger.info(f"🔧 [КОМАНДА] !scanlive від {ctx.author}")
@@ -448,6 +453,7 @@ async def scanlive(ctx):
         await ctx.send(embed=embed)
 
 @bot.command()
+@commands.has_permissions(manage_messages=True)
 async def lastkills(ctx, count: int = 10):
     """Показує останні кіли/смерті зі світового логу Albion (без фільтру гільдії)"""
     logger.info(f"🔧 [КОМАНДА] !lastkills (count={count}) від {ctx.author}")
@@ -482,7 +488,7 @@ async def lastkills(ctx, count: int = 10):
 
     except Exception as e:
         logger.error(f"❌ [КОМАНДА] !lastkills — збій: {e}")
-        await ctx.send(f"🔴 **Помилка:** `{str(e)}`")
+        await ctx.send("🔴 **Помилка отримання даних.** Спробуйте пізніше.")
 
 @bot.command()
 async def info(ctx):
@@ -569,6 +575,11 @@ async def help(ctx):
     embed.add_field(name="!status", value="📊 Статус моніторингу: цикли, події, кеш", inline=False)
     embed.set_footer(text="Напиши !info для детального опису кожної команди | Розробник: EvilHIMARS")
     await ctx.send(embed=embed)
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("🚫 У вас немає прав для використання цієї команди.")
 
 # Запуск всієї екосистеми
 keep_alive()
