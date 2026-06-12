@@ -188,7 +188,7 @@ async def monitor_loop():
     logger.info(f"🚀 [МОНІТОР] Канал вбивств: {'✅ ' + kill_channel.name if kill_channel else '❌ НЕ ЗНАЙДЕНО (ID: ' + str(KILL_CHANNEL_ID) + ')'}")
     logger.info(f"🚀 [МОНІТОР] Канал смертей: {'✅ ' + death_channel.name if death_channel else '❌ НЕ ЗНАЙДЕНО (ID: ' + str(DEATH_CHANNEL_ID) + ')'}")
     logger.info(f"🚀 [МОНІТОР] Інтервал опитування: кожні 30 секунд")
-    logger.info(f"🚀 [МОНІТОР] Ліміт подій за запит: 100")
+    logger.info(f"🚀 [МОНІТОР] Ліміт подій за запит: 51")
     logger.info("=" * 50)
 
     # Тестовий запит при старті
@@ -205,8 +205,8 @@ async def monitor_loop():
     while not bot.is_closed():
         _cycle_count += 1
         try:
-            logger.info(f"📡 [ЦИКЛ #{_cycle_count}] Відправляю запит до Albion API (limit=100)...")
-            events = await get_events(limit=100)
+            logger.info(f"📡 [ЦИКЛ #{_cycle_count}] Відправляю запит до Albion API (limit=51)...")
+            events = await get_events(limit=51)
             
             if not events or not isinstance(events, list):
                 logger.warning(f"⚠️  [ЦИКЛ #{_cycle_count}] Albion API повернув порожній список. Пропуск ітерації. Наступна спроба через 30 сек.")
@@ -281,7 +281,7 @@ async def on_ready():
     logger.info("   !checkapi  — Перевірка статусу API Albion Online")
     logger.info("   !guild     — Статистика гільдії з офіційного API")
     logger.info("   !status    — Статус моніторингу бота (цикли, події, кеш)")
-    logger.info("   !scan      — Глибоке сканування 100 останніх подій на кіли/смерті гільдії")
+    logger.info("   !scan      — Глибоке сканування 51 останню подій на кіли/смерті гільдії")
     logger.info("   !lastkills — Показати останні кіли/смерті зі світового логу")
     logger.info("   !scanlive  — Сканування 20 останніх подій (компактний вивід)")
     logger.info("   !help      — Короткий список команд")
@@ -350,7 +350,7 @@ async def status(ctx):
     embed.add_field(name="🎯 Подій гільдії знайдено", value=f"`{_total_guild_events}`", inline=True)
     embed.add_field(name="🧠 Кеш дублікатів", value=f"`{len(PROCESSED_EVENTS)} / {MAX_CACHE_SIZE}`", inline=True)
     embed.add_field(name="⏱️ Інтервал", value="`кожні 30 сек`", inline=True)
-    embed.add_field(name="📦 Ліміт подій", value="`100 за запит`", inline=True)
+    embed.add_field(name="📦 Ліміт подій", value="`51 за запит`", inline=True)
     
     kill_ch = bot.get_channel(KILL_CHANNEL_ID)
     death_ch = bot.get_channel(DEATH_CHANNEL_ID)
@@ -364,12 +364,12 @@ async def status(ctx):
 
 @bot.command()
 async def scan(ctx):
-    """Глибоке сканування 100 останніх подій — шукає кіли/смерті гільдії"""
+    """Глибоке сканування 51 останню подій — шукає кіли/смерті гільдії"""
     logger.info(f"🔧 [КОМАНДА] !scan від {ctx.author}")
-    status_msg = await ctx.send("🔍 **Глибоке сканування:** перевіряю 100 останніх подій в Albion Europe...")
+    status_msg = await ctx.send("🔍 **Глибоке сканування:** перевіряю 51 останню подій в Albion Europe...")
 
     try:
-        events = await get_events(limit=100)
+        events = await get_events(limit=51)
         if not events or not isinstance(events, list):
             logger.warning("[КОМАНДА] !scan — API повернув порожній список")
             await status_msg.edit(content="🟡 API Альбіону повернув порожній список подій. Спробуй пізніше.")
@@ -496,7 +496,7 @@ async def info(ctx):
 
     embed.add_field(
         name="🔍 !scan",
-        value="**Глибоке сканування.** Залазить в логи Albion API та перевіряє 100 останніх подій. "
+        value="**Глибоке сканування.** Залазить в логи Albion API та перевіряє 51 останню подій. "
               "Шукає вбивства, смерті та асисти гільдії. Все знайдене відправляє прямо в чат з детальними картками бою.",
         inline=False
     )
@@ -543,7 +543,7 @@ async def info(ctx):
 
     embed.add_field(
         name="⚙️ Як працює автоматичний моніторинг?",
-        value="Бот кожні **30 секунд** відправляє запит до Albion API та отримує **100 останніх подій** у світі. "
+        value="Бот кожні **30 секунд** відправляє запит до Albion API та отримує **51 останню подій** у світі. "
               "Потім фільтрує їх по ID гільдії та відправляє:\n"
               "• ☠️ **Вбивства** → канал вбивств\n"
               "• 💀 **Смерті** → канал смертей\n"
@@ -561,7 +561,7 @@ async def help(ctx):
     logger.info(f"🔧 [КОМАНДА] !help від {ctx.author}")
     embed = discord.Embed(title="📋 Команди бота x E C L I P S E x", color=0xf39c12)
     embed.add_field(name="!info", value="📖 Повний список команд з детальним описом", inline=False)
-    embed.add_field(name="!scan", value="🔍 Глибоке сканування 100 подій — пошук кілів/смертей гільдії", inline=False)
+    embed.add_field(name="!scan", value="🔍 Глибоке сканування 51 подій — пошук кілів/смертей гільдії", inline=False)
     embed.add_field(name="!scanlive", value="⚔️ Швидкий скан 20 останніх подій (компактний вивід)", inline=False)
     embed.add_field(name="!lastkills [n]", value="🌍 Останні n кілів зі світового логу (за замовч. 10, макс. 20)", inline=False)
     embed.add_field(name="!checkapi", value="🌐 Перевірка з'єднання з API Albion Online", inline=False)
