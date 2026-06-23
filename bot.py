@@ -19,7 +19,6 @@ from image_renderer import ImageRenderer
 from render_api import RenderAPI
 from cache_manager import IconCache
 
-# Инициализация рендерера
 _icon_cache = IconCache()
 _render_api = RenderAPI(_icon_cache)
 _img_renderer = ImageRenderer(_render_api)
@@ -183,6 +182,16 @@ except ValueError:
     KILL_CHANNEL_ID = 0
     DEATH_CHANNEL_ID = 0
 
+logger.info("=" * 50)
+logger.info("⚙️  [INIT] Завантаження конфігурації...")
+logger.info(f"⚙️  [INIT] GUILD_ID: {GUILD_ID or '❌ НЕ ЗНАЙДЕНО'}")
+logger.info(f"⚙️  [INIT] BIG_KILL_FAME поріг: {BIG_KILL_FAME:,}")
+logger.info(f"⚙️  [INIT] BIG_KILL_ROLE_ID: {BIG_KILL_ROLE_ID or 'Не налаштовано (пінг @everyone)'}")
+logger.info(f"⚙️  [INIT] KILL_CHANNEL_ID: {KILL_CHANNEL_ID or '❌ НЕ ЗНАЙДЕНО'}")
+logger.info(f"⚙️  [INIT] DEATH_CHANNEL_ID: {DEATH_CHANNEL_ID or '❌ НЕ ЗНАЙДЕНО'}")
+logger.info(f"⚙️  [INIT] DISCORD_TOKEN: {'✅ Знайдено' if TOKEN else '❌ НЕ ЗНАЙДЕНО'}")
+logger.info("=" * 50)
+
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -209,6 +218,8 @@ def _event_to_dict(event):
         "Victim": event.get("Victim", {}),
         "TotalVictimKillFame": event.get("TotalVictimKillFame", 0),
         "TimeStamp": event.get("TimeStamp", ""),
+        "TotalDamage": event.get("TotalDamage", 0),
+        "Participants": event.get("Participants", []),
         "Equipment": (event.get("Victim") or {}).get("Equipment", {}),
     }
 
@@ -249,6 +260,7 @@ def manage_cache(event_id):
     if event_id in PROCESSED_EVENTS:
         return False
     if len(PROCESSED_EVENTS) > MAX_CACHE_SIZE:
+        logger.info(f"🧹 [КЕШ] Очистка ({len(PROCESSED_EVENTS)} записів)...")
         PROCESSED_EVENTS.clear()
     PROCESSED_EVENTS.add(event_id)
     return True
@@ -274,11 +286,13 @@ async def dispatch_event(event, result_type, kill_ch, death_ch):
                     await kill_ch.send(content=f"{ping_text}\n{t('big_kill_alert', fame=fame)}", embed=embed, file=file)
                 else:
                     await kill_ch.send(embed=embed, file=file)
+                logger.info(f"📤 [ВІДПРАВКА] Вбивство #{event_id}: {killer_name} вбив {victim_name} | Fame: {fame:,}")
         elif result_type == "death":
             _daily_deaths += 1
             embed, file = create_battle_embed(event, t("death_title"), 0xe74c3c)
             if death_ch:
                 await death_ch.send(embed=embed, file=file)
+                logger.info(f"📤 [ВІДПРАВКА] Смерть #{event_id}: {victim_name} загинув від {killer_name} | Fame: {fame:,}")
         elif result_type == "assist":
             _daily_assists += 1
             _daily_top_killers[killer_name] = _daily_top_killers.get(killer_name, 0) + fame
@@ -289,6 +303,7 @@ async def dispatch_event(event, result_type, kill_ch, death_ch):
                     await kill_ch.send(content=f"{ping_text}\n{t('big_kill_alert', fame=fame)}", embed=embed, file=file)
                 else:
                     await kill_ch.send(embed=embed, file=file)
+                logger.info(f"📤 [ВІДПРАВКА] Асист #{event_id}: допомога у вбивстві {victim_name} | Fame: {fame:,}")
     except Exception as dispatch_err:
         logger.error(f"❌ [ВІДПРАВКА] Помилка для #{event_id}: {dispatch_err}")
 
@@ -308,13 +323,31 @@ async def monitor_loop():
     kill_channel = bot.get_channel(KILL_CHANNEL_ID)
     death_channel = bot.get_channel(DEATH_CHANNEL_ID)
 
-    logger.info("🚀 [МОНІТОР] Запуск фонового моніторингу...")
+    logger.info("=" * 50)
+    logger.info("🚀 [МОНІТОР] Запуск фонового моніторингу Albion API")
+    logger.info(f"🚀 [МОНІТОР] Канал вбивств: {'✅ ' + kill_channel.name if kill_channel else '❌ НЕ ЗНАЙДЕНО'}")
+    logger.info(f"🚀 [МОНІТОР] Канал смертей: {'✅ ' + death_channel.name if death_channel else '❌ НЕ ЗНАЙДЕНО'}")
+    logger.info(f"🚀 [МОНІТОР] Інтервал: 30 сек | Ліміт: 51 | Пінг при fame >= {BIG_KILL_FAME:,}")
+    logger.info("=" * 50)
+
+    logger.info("🔌 [МОНІТОР] Підключення до серверів Albion Online (Europe Gateway)...")
+    test_events = await get_events(limit=5)
+    if test_events and isinstance(test_events, list):
+        logger.info(f"✅ [МОНІТОР] З'єднання успішне! Отримано {len(test_events)} тестових подій")
+        logger.info(f"✅ [МОНІТОР] Останній EventId: {test_events[0].get('EventId', '?')}")
+    else:
+        logger.warning("⚠️  [МОНІТОР] Порожня відповідь. Можливо сервер перевантажений.")
+
+    logger.info("🔄 [МОНІТОР] Починаю безперервний моніторинг...")
 
     while not bot.is_closed():
         _cycle_count += 1
         try:
+            logger.info(f"📡 [ЦИКЛ #{_cycle_count}] Запит до Albion API (limit=51)...")
             events = await get_events(limit=51)
-            if not events:
+
+            if not events or not isinstance(events, list):
+                logger.warning(f"⚠️  [ЦИКЛ #{_cycle_count}] Порожній список. Наступна спроба через 30 сек.")
                 await asyncio.sleep(30)
                 continue
 
@@ -324,18 +357,45 @@ async def monitor_loop():
 
             for event in events:
                 event_id = event.get("EventId")
-                if not event_id or not manage_cache(event_id):
+                if not event_id:
                     continue
+
+                if not manage_cache(event_id):
+                    continue
+
                 new_events_count += 1
+
                 result_type = is_guild_kill(event)
                 if not result_type:
                     continue
+
                 guild_events_in_cycle += 1
                 _total_guild_events += 1
                 await dispatch_event(event, result_type, kill_channel, death_channel)
 
+            duplicates_count = len(events) - new_events_count
+            logger.info(
+                f"📊 [ЦИКЛ #{_cycle_count}] Отримано {len(events)} | "
+                f"нових: {new_events_count} | дублікатів: {duplicates_count} | "
+                f"гільдія: {guild_events_in_cycle} | кеш: {len(PROCESSED_EVENTS)}"
+            )
+
+            if guild_events_in_cycle > 0:
+                logger.info(f"🎯 [ЦИКЛ #{_cycle_count}] Знайдено {guild_events_in_cycle} подій гільдії!")
+
+            if _cycle_count % 10 == 0:
+                logger.info(
+                    f"📈 [СТАТИСТИКА] {_cycle_count} циклів | "
+                    f"{_total_events_scanned} подій | "
+                    f"{_total_guild_events} гільдії | "
+                    f"кеш: {len(PROCESSED_EVENTS)}/{MAX_CACHE_SIZE}"
+                )
+
+        except asyncio.CancelledError:
+            logger.info("🛑 [МОНІТОР] Зупинено.")
+            break
         except Exception as e:
-            logger.error(f"❌ [ЦИКЛ] Збій: {e}")
+            logger.error(f"❌ [ЦИКЛ #{_cycle_count}] Збій: {type(e).__name__}: {e}")
 
         await asyncio.sleep(30)
 
@@ -343,13 +403,16 @@ async def daily_report_loop():
     global _daily_kills, _daily_deaths, _daily_assists, _daily_fame, _daily_top_killers
 
     await bot.wait_until_ready()
+    logger.info("📅 [ЗВІТ] Запущено планувальник щоденних звітів (22:00 UTC)")
 
     while not bot.is_closed():
         now = datetime.now(timezone.utc)
         target = now.replace(hour=22, minute=0, second=0, microsecond=0)
         if now >= target:
             target += timedelta(days=1)
-        await asyncio.sleep((target - now).total_seconds())
+        wait_seconds = (target - now).total_seconds()
+        logger.info(f"📅 [ЗВІТ] Наступний звіт через {wait_seconds/3600:.1f} годин")
+        await asyncio.sleep(wait_seconds)
 
         try:
             kill_channel = bot.get_channel(KILL_CHANNEL_ID)
@@ -361,13 +424,27 @@ async def daily_report_loop():
             embed.add_field(name=t("deaths_count"), value=f"**{_daily_deaths}**", inline=True)
             embed.add_field(name="🤝 Асисти", value=f"**{_daily_assists}**", inline=True)
             embed.add_field(name=t("fame") + " за день", value=f"🏆 **{_daily_fame:,}**", inline=False)
+            embed.add_field(name=t("scanned_events"), value=f"`{_total_events_scanned:,}`", inline=True)
+            embed.add_field(name=t("guild_events_found"), value=f"`{_total_guild_events}`", inline=True)
 
             if _daily_top_killers:
                 sorted_killers = sorted(_daily_top_killers.items(), key=lambda x: x[1], reverse=True)[:5]
                 top_text = "\n".join([f"**{i+1}.** {name} — {fame:,} fame" for i, (name, fame) in enumerate(sorted_killers)])
                 embed.add_field(name=t("top_killers") + " (за день)", value=top_text, inline=False)
 
+            api_top = await get_guild_top(GUILD_ID, range_type="week", limit=5)
+            if api_top:
+                api_top_text = []
+                for i, event in enumerate(api_top[:5]):
+                    k = (event.get("Killer") or {}).get("Name", "?")
+                    v = (event.get("Victim") or {}).get("Name", "?")
+                    f_val = event.get("TotalVictimKillFame", 0)
+                    api_top_text.append(f"**{i+1}.** {k} ☠️ {v} — {f_val:,} fame")
+                embed.add_field(name=t("top_killers") + f" ({t('weekly_report')})", value="\n".join(api_top_text), inline=False)
+
+            embed.set_footer(text="Автоматичний звіт | Dev: EvilHIMARS")
             await kill_channel.send(embed=embed)
+            logger.info(f"📅 [ЗВІТ] Надіслано: kills={_daily_kills}, deaths={_daily_deaths}, fame={_daily_fame:,}")
 
             _daily_kills = 0
             _daily_deaths = 0
@@ -382,7 +459,12 @@ async def daily_report_loop():
 # ==========================================
 @bot.event
 async def on_ready():
+    logger.info("=" * 50)
     logger.info(f"✅ [DISCORD] Бот: {bot.user.name} (ID: {bot.user.id})")
+    logger.info(f"✅ [DISCORD] Серверів: {len(bot.guilds)}")
+    for g in bot.guilds:
+        logger.info(f"   📌 {g.name} (ID: {g.id}, учасників: {g.member_count})")
+    logger.info("=" * 50)
 
     try:
         synced = await bot.tree.sync()
@@ -532,75 +614,3 @@ async def battleboard(interaction: discord.Interaction, event_id: int):
     event = await get_event_details(event_id)
     if not event:
         await interaction.followup.send(t("battle_not_found", id=event_id))
-        return
-
-    embed, file = create_battle_embed(event, f"⚔️ Бій #{event_id}", 0xe67e22)
-    await interaction.followup.send(embed=embed, file=file)
-
-@bot.tree.command(name="checkapi", description="Перевірка API Albion Online")
-async def checkapi(interaction: discord.Interaction):
-    await interaction.response.defer()
-    try:
-        events = await get_events(limit=1)
-        if events:
-            event = events[0]
-            embed = discord.Embed(title="🌐 Статус API", color=0x2ecc71)
-            embed.add_field(name="🟢 Стан", value="Працює!", inline=False)
-            embed.add_field(name="📊 Остання подія", value=f"`{event.get('EventId', '?')}`", inline=True)
-            await interaction.followup.send(embed=embed)
-        else:
-            await interaction.followup.send(t("empty_api"))
-    except Exception as e:
-        await interaction.followup.send(t("api_error", error=str(e)))
-
-@bot.tree.command(name="guild", description="Інформація про гільдію")
-async def guild(interaction: discord.Interaction):
-    await interaction.response.defer()
-    data = await get_guild_info(GUILD_ID)
-    if not data:
-        await interaction.followup.send("❌ Не вдалося отримати дані.")
-        return
-
-    embed = discord.Embed(title=f"🏰 {data.get('Name', '?')}", color=0x3498db)
-    embed.add_field(name="👑 Лідер", value=data.get('FounderName', '—'), inline=True)
-    embed.add_field(name="👥 Учасників", value=f"{data.get('MemberCount', 0)} / 300", inline=True)
-    embed.add_field(name="⚔️ Kill Fame", value=f"{data.get('KillFame', 0):,}", inline=True)
-    embed.add_field(name="💀 Death Fame", value=f"{data.get('DeathFame', 0):,}", inline=True)
-    await interaction.followup.send(embed=embed)
-
-@bot.tree.command(name="status", description="Статус моніторингу")
-async def status(interaction: discord.Interaction):
-    embed = discord.Embed(title="📊 Статус", color=0x9b59b6)
-    embed.add_field(name="🔄 Циклів", value=f"`{_cycle_count}`", inline=True)
-    embed.add_field(name="📡 Подій", value=f"`{_total_events_scanned:,}`", inline=True)
-    embed.add_field(name="🎯 Гільдія", value=f"`{_total_guild_events}`", inline=True)
-    embed.add_field(name="📅 Сьогодні", value=f"⚔️ {_daily_kills} | 💀 {_daily_deaths} | 🤝 {_daily_assists}\n🏆 {_daily_fame:,} fame", inline=False)
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="lang", description="Змінити мову бота")
-async def lang(interaction: discord.Interaction, language: str):
-    global _current_lang
-    if language.lower() not in TRANSLATIONS:
-        await interaction.response.send_message("❌ Доступні мови: `ua`, `ru`, `en`", ephemeral=True)
-        return
-    _current_lang = language.lower()
-    await interaction.response.send_message(t("lang_set"))
-
-@bot.tree.command(name="info", description="Список команд")
-async def info(interaction: discord.Interaction):
-    embed = discord.Embed(title="📖 x E C L I P S E x — Killboard Bot", description="Слеш-команди з картками екіпіровки", color=0xf39c12)
-    embed.add_field(name="/scan", value="Скан 51 подій гільдії з картками", inline=False)
-    embed.add_field(name="/scanlive", value="Швидкий скан 20 подій з картками", inline=False)
-    embed.add_field(name="/lastkills [n]", value="Останні n кілів з картками (макс 20)", inline=False)
-    embed.add_field(name="/top [період]", value="Топ-10 кілерів гільдії", inline=False)
-    embed.add_field(name="/player [ім'я]", value="Статистика гравця", inline=False)
-    embed.add_field(name="/battleboard [ID]", value="Деталі бою з карткою", inline=False)
-    embed.add_field(name="/guild", value="Інфо гільдії", inline=False)
-    embed.add_field(name="/status", value="Статус моніторингу", inline=False)
-    embed.add_field(name="/lang [ua/ru/en]", value="Зміна мови", inline=False)
-    embed.add_field(name="/checkapi", value="Перевірка API", inline=False)
-    await interaction.response.send_message(embed=embed)
-
-# Запуск
-keep_alive()
-bot.run(TOKEN)
