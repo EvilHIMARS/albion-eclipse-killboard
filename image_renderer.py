@@ -9,6 +9,7 @@ from cache_manager import IconCache
 logger = logging.getLogger(__name__)
 
 ICON_SIZE = 56
+SMALL_ICON = 28
 GAP = 10
 
 SLOT_GRID = [
@@ -31,7 +32,7 @@ class ImageRenderer:
     def __init__(self, render_api: RenderAPI):
         self.api = render_api
         self.width = 820
-        self.height = 720
+        self.height = 680
         self.bg = (18, 15, 12)
         self.panel_dark = (28, 22, 18)
         self.border = (70, 50, 30)
@@ -88,7 +89,6 @@ class ImageRenderer:
 
         # === ЦЕНТР — Экипировка ===
         eq_y = 115
-
         k_equip = killer.get("Equipment") or {}
         v_equip = victim.get("Equipment") or {}
 
@@ -102,12 +102,10 @@ class ImageRenderer:
         draw.text((killer_start_x + 10, eq_y - 18), "KILLER BUILD", fill=self.gold, font=font_small)
         draw.text((victim_start_x + 10, eq_y - 18), "VICTIM BUILD", fill=(220, 80, 70), font=font_small)
 
-        # Вертикальная полоса по центру
         mid_x = self.width // 2
         grid_h = 4 * (ICON_SIZE + GAP) - GAP
         draw.rectangle([mid_x - 2, eq_y - 20, mid_x + 2, eq_y + grid_h + 10], fill=self.border)
 
-        # Плашка VICTORY / DEFEAT
         center_y = eq_y + grid_h // 2 - 20
         killed_bg = (190, 50, 40) if is_kill else (60, 60, 60)
         draw.rounded_rectangle([mid_x - 55, center_y - 18, mid_x + 55, center_y + 22], radius=6, fill=killed_bg)
@@ -119,62 +117,74 @@ class ImageRenderer:
         draw.text((mid_x - 45, center_y + 55), f"IP K: {k_ip:.0f}", fill=self.text_grey, font=font_small)
         draw.text((mid_x - 45, center_y + 72), f"IP V: {v_ip:.0f}", fill=self.text_grey, font=font_small)
 
-        # === УЧАСТНИКИ (Assists & Heals) ===
-        participants = event_data.get("Participants") or []
-        if participants:
-            part_y = eq_y + grid_h + 20
-            draw.text((25, part_y), "PARTICIPANTS", fill=self.gold, font=font_title)
-
-            # Заголовки колонок
-            draw.text((25, part_y + 22), "Name", fill=self.text_grey, font=font_small)
-            draw.text((230, part_y + 22), "Damage", fill=(255, 150, 130), font=font_small)
-            draw.text((350, part_y + 22), "Heal", fill=(130, 200, 130), font=font_small)
-            draw.text((470, part_y + 22), "Guild", fill=self.text_grey, font=font_small)
-
-            # Линия
-            draw.line([25, part_y + 40, self.width - 25, part_y + 40], fill=(60, 45, 30), width=1)
-
-            # Участники (макс 6)
-            for i, p in enumerate(participants[:6]):
-                row_y = part_y + 46 + i * 20
-                p_name = p.get("Name", "?")[:20]
-                p_dmg = p.get("DamageDone", 0)
-                p_heal = p.get("SupportValue", 0)
-                p_guild = p.get("GuildName", "")[:15]
-
-                draw.text((25, row_y), p_name, fill=self.text_white, font=font_small)
-                draw.text((230, row_y), f"{p_dmg:,}", fill=(255, 150, 130), font=font_small)
-                draw.text((350, row_y), f"{p_heal:,}", fill=(130, 200, 130), font=font_small)
-                draw.text((470, row_y), f"[{p_guild}]" if p_guild else "—", fill=self.text_dim, font=font_small)
-
-            part_end_y = part_y + 50 + min(len(participants), 6) * 20 + 10
-        else:
-            part_end_y = eq_y + grid_h + 20
-
-        # === НИЗ — Combat Stats ===
-        stats_y = part_end_y + 5
+        # === НИЗ — Combat Stats + Participants ===
+        stats_y = eq_y + grid_h + 25
         draw.rectangle([0, stats_y, self.width, stats_y + 2], fill=self.border)
 
         draw.text((25, stats_y + 12), "COMBAT STATS", fill=self.gold, font=font_title)
 
+        # Damage
+        participants = event_data.get("Participants") or []
         total_dmg = event_data.get("TotalDamage", 0)
         if not total_dmg:
             total_dmg = sum(p.get("DamageDone", 0) for p in participants)
 
-        dmg_bar_y = stats_y + 38
+        dmg_bar_y = stats_y + 40
         draw.text((25, dmg_bar_y - 18), "Damage", fill=self.text_grey, font=font_small)
         draw.text((25, dmg_bar_y), k_name, fill=self.text_white, font=font_text)
         dmg_text = f"{total_dmg:,} DMG"
         dtw = draw.textlength(dmg_text, font=font_text)
         draw.text((self.width - dtw - 25, dmg_bar_y), dmg_text, fill=(255, 150, 130), font=font_text)
 
-        bar_x, bar_y, bar_w, bar_h = 25, dmg_bar_y + 22, self.width - 50, 12
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], radius=4, fill=(40, 30, 25))
+        bar_x, bar_y, bar_w, bar_h = 25, dmg_bar_y + 22, self.width - 50, 10
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], radius=3, fill=(40, 30, 25))
         if total_dmg > 0:
-            fill_ratio = min(total_dmg / max(total_dmg, 1), 1.0)
-            fill_w = int(bar_w * fill_ratio)
-            draw.rounded_rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], radius=4, fill=(200, 50, 40))
+            fill_w = int(bar_w * min(total_dmg / max(total_dmg, 1), 1.0))
+            draw.rounded_rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], radius=3, fill=(200, 50, 40))
 
+        # === УЧАСТНИКИ В COMBAT STATS ===
+        if participants:
+            part_y = bar_y + 20
+            draw.text((25, part_y + 5), "PARTICIPANTS", fill=self.gold, font=font_small)
+            draw.line([25, part_y + 22, self.width - 25, part_y + 22], fill=(60, 45, 30), width=1)
+
+            # Показываем до 7 участников в 2 колонки
+            for i, p in enumerate(participants[:7]):
+                col = i % 2
+                row = i // 2
+                px = 25 + col * 390
+                py = part_y + 28 + row * 42
+
+                p_name = p.get("Name", "?")[:18]
+                p_dmg = p.get("DamageDone", 0)
+                p_heal = p.get("SupportValue", 0)
+                p_weapon = p.get("Equipment", {}).get("MainHand", {})
+                p_weapon_type = p_weapon.get("Type", "") if isinstance(p_weapon, dict) else str(p_weapon) if p_weapon else ""
+
+                # Иконка оружия
+                if p_weapon_type:
+                    icon_data = self.api.fetch_icon(p_weapon_type)
+                    try:
+                        icon = Image.open(io.BytesIO(icon_data)).convert("RGBA").resize((SMALL_ICON, SMALL_ICON))
+                        img.paste(icon, (px, py), icon)
+                    except:
+                        draw.rounded_rectangle([px, py, px + SMALL_ICON, py + SMALL_ICON], radius=3, fill=(35, 28, 22))
+
+                    # Рамка по тиру
+                    tier = self._parse_tier(p_weapon_type)
+                    color = TIER_COLORS.get(tier, (100, 100, 100))
+                    draw.rounded_rectangle([px - 1, py - 1, px + SMALL_ICON + 1, py + SMALL_ICON + 1], radius=3, outline=color, width=1)
+                else:
+                    draw.rounded_rectangle([px, py, px + SMALL_ICON, py + SMALL_ICON], radius=3, fill=(35, 28, 22))
+
+                # Имя
+                draw.text((px + SMALL_ICON + 6, py - 2), p_name, fill=self.text_white, font=font_small)
+                # DMG / HEAL
+                stats_text = f"⚔ {p_dmg:,}  💚 {p_heal:,}"
+                draw.text((px + SMALL_ICON + 6, py + 14), stats_text, fill=self.text_grey, font=font_tiny)
+
+        # Дата и сервер
+        bottom_y = self.height - 50
         ts = event_data.get("TimeStamp", "")
         if ts:
             try:
@@ -185,14 +195,14 @@ class ImageRenderer:
         else:
             ts_str = ""
 
-        draw.text((25, bar_y + 25), "Server: Europe", fill=self.text_dim, font=font_small)
+        draw.text((25, bottom_y), "Server: Europe", fill=self.text_dim, font=font_small)
         if ts_str:
             tsw = draw.textlength(ts_str, font=font_small)
-            draw.text((self.width - tsw - 25, bar_y + 25), ts_str, fill=self.text_dim, font=font_small)
+            draw.text((self.width - tsw - 25, bottom_y), ts_str, fill=self.text_dim, font=font_small)
 
-        draw.line([0, self.height - 28, self.width, self.height - 28], fill=self.border)
-        draw.text((25, self.height - 24), "Albion Eclipse Killboard", fill=self.text_dim, font=font_tiny)
-        draw.text((self.width - 100, self.height - 24), "Dev: EvilHIMARS", fill=self.text_dim, font=font_tiny)
+        draw.line([0, bottom_y + 20, self.width, bottom_y + 20], fill=self.border)
+        draw.text((25, bottom_y + 24), "Albion Eclipse Killboard", fill=self.text_dim, font=font_tiny)
+        draw.text((self.width - 100, bottom_y + 24), "Dev: EvilHIMARS", fill=self.text_dim, font=font_tiny)
 
         buf = io.BytesIO()
         img.save(buf, format="PNG")
