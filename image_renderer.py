@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 ICON_SIZE = 52
 GAP = 8
 
-# Сетка как в Albion UI
 SLOT_GRID = [
     ("Bag",      0, 0), ("Head",     1, 0), ("Cape",     2, 0),
     ("MainHand", 0, 1), ("Armor",    1, 1), ("OffHand",  2, 1),
@@ -105,7 +104,7 @@ class ImageRenderer:
         eq_center_y = eq_y + 120
         draw.rectangle([mid_x - 1, eq_y, mid_x + 1, eq_y + 260], fill=self.border)
 
-        # Плашка KILLED
+        # Плашка VICTORY / DEFEAT
         killed_bg = (190, 50, 40) if is_kill else (40, 40, 40)
         draw.rounded_rectangle([mid_x - 50, eq_center_y - 18, mid_x + 50, eq_center_y + 22], radius=6, fill=killed_bg)
         killed_text = "VICTORY" if is_kill else "DEFEAT"
@@ -122,22 +121,22 @@ class ImageRenderer:
 
         draw.text((25, stats_y + 12), "COMBAT STATS", fill=self.gold, font=font_title)
 
+        # Собираем урон из Participants
+        participants = event_data.get("Participants") or []
+        total_dmg = sum(p.get("DamageDone", 0) for p in participants)
+
         dmg_bar_y = stats_y + 40
         draw.text((25, dmg_bar_y - 18), "Damage", fill=self.text_grey, font=font_small)
         draw.text((25, dmg_bar_y), k_name, fill=self.text_white, font=font_text)
-
-        total_dmg = event_data.get("TotalDamage", 0)
-        if not total_dmg:
-            participants = event_data.get("Participants") or []
-            total_dmg = sum(p.get("DamageDone", 0) for p in participants)
-
         draw.text((self.width - 120, dmg_bar_y), f"{total_dmg:,} DMG", fill=(255, 150, 130), font=font_text)
 
+        # Полоска урона
         bar_x, bar_y, bar_w, bar_h = 25, dmg_bar_y + 22, self.width - 50, 10
         draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], radius=3, fill=(40, 30, 25))
         fill_w = min(int(bar_w * 0.75), bar_w)
         draw.rounded_rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], radius=3, fill=(200, 50, 40))
 
+        # Дата
         ts = event_data.get("TimeStamp", "")
         if ts:
             try:
@@ -164,7 +163,7 @@ class ImageRenderer:
         return buf
 
     def _draw_build(self, draw, img, equip, start_x, start_y, font):
-        """Рисует сетку 4x3 с иконками."""
+        """Рисует сетку 4x3 с иконками БЕЗ подписей."""
         for slot_entry in SLOT_GRID:
             slot_name, col, row = slot_entry
             if slot_name is None:
@@ -173,6 +172,7 @@ class ImageRenderer:
             x = start_x + col * (ICON_SIZE + GAP)
             y = start_y + row * (ICON_SIZE + GAP)
 
+            # Фон ячейки
             draw.rounded_rectangle([x, y, x + ICON_SIZE, y + ICON_SIZE], radius=3, fill=(35, 28, 22))
             draw.rounded_rectangle([x, y, x + ICON_SIZE, y + ICON_SIZE], radius=3, outline=(55, 40, 28), width=1)
 
@@ -189,23 +189,13 @@ class ImageRenderer:
                 except:
                     pass
 
+                # Рамка по тиру
                 tier = self._parse_tier(item_type)
                 color = TIER_COLORS.get(tier, (100, 100, 100))
                 draw.rounded_rectangle([x - 1, y - 1, x + ICON_SIZE + 1, y + ICON_SIZE + 1], radius=4, outline=color, width=2)
-
-                label = self._format_label(item_type)
-                lw = draw.textlength(label, font=font)
-                draw.text((x + ICON_SIZE // 2 - lw // 2, y + ICON_SIZE + 2), label, fill=(180, 170, 150), font=font)
 
     def _parse_tier(self, item_type: str) -> int:
         try:
             return int(item_type[1])
         except:
             return 4
-
-    def _format_label(self, item_type: str) -> str:
-        enchant = ""
-        if "@" in item_type:
-            enchant = f".{item_type.split('@')[1]}"
-        tier = self._parse_tier(item_type)
-        return f"T{tier}{enchant}"
