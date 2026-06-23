@@ -65,7 +65,6 @@ class ImageRenderer:
         v_ip = victim.get("AverageItemPower", 0)
         fame = event_data.get("TotalVictimKillFame", 0)
 
-        # Estimated Silver Lost
         v_equip = victim.get("Equipment") or {}
         silver_lost = estimate_total_loss(v_equip)
 
@@ -89,26 +88,6 @@ class ImageRenderer:
             title = f"{k_name[:10]}.. killed {v_name[:10]}.."
         draw.text((badge_x + badge_w + 16 * SCALE, badge_y + 2 * SCALE), title, fill=COLORS["foreground"], font=font_title)
 
-        # Fame & Silver badges
-        fame_text = f"Fame: {fame:,}"
-        ftw = draw.textlength(fame_text, font=font_text)
-        draw.rounded_rectangle(
-            [self.width - PADDING - 20 * SCALE - ftw - 24 * SCALE, PADDING + 12 * SCALE,
-             self.width - PADDING - 20 * SCALE, PADDING + 42 * SCALE],
-            radius=8 * SCALE, fill=(39, 39, 42)
-        )
-        draw.text((self.width - PADDING - 20 * SCALE - ftw - 12 * SCALE, PADDING + 18 * SCALE), fame_text, fill=COLORS["warning"], font=font_text)
-
-        if silver_lost > 0:
-            silver_text = f"Loss: {format_silver(silver_lost)}"
-            stw = draw.textlength(silver_text, font=font_small)
-            draw.rounded_rectangle(
-                [self.width - PADDING - 20 * SCALE - stw - 16 * SCALE, PADDING + 48 * SCALE,
-                 self.width - PADDING - 20 * SCALE, PADDING + 72 * SCALE],
-                radius=6 * SCALE, fill=(39, 39, 42)
-            )
-            draw.text((self.width - PADDING - 20 * SCALE - stw - 8 * SCALE, PADDING + 54 * SCALE), silver_text, fill=COLORS["silver"], font=font_small)
-
         # === EQUIPMENT ===
         eq_y = PADDING + header_h + 16 * SCALE
         k_equip = killer.get("Equipment") or {}
@@ -117,6 +96,7 @@ class ImageRenderer:
         card_w = grid_w + 24 * SCALE
         card_h = grid_h + 70 * SCALE
 
+        # KILLER CARD
         killer_card_x = PADDING
         draw.rounded_rectangle([killer_card_x, eq_y, killer_card_x + card_w, eq_y + card_h], radius=RADIUS, fill=COLORS["card"])
         draw.text((killer_card_x + 12 * SCALE, eq_y + 10 * SCALE), k_name, fill=COLORS["foreground"], font=font_heading)
@@ -125,6 +105,7 @@ class ImageRenderer:
         draw.text((killer_card_x + 12 * SCALE, eq_y + 48 * SCALE), f"IP: {k_ip:.0f}", fill=COLORS["muted"], font=font_tiny)
         self._draw_build(draw, img, k_equip, killer_card_x + 12 * SCALE, eq_y + 60 * SCALE)
 
+        # VICTIM CARD
         victim_card_x = self.width - PADDING - card_w
         draw.rounded_rectangle([victim_card_x, eq_y, victim_card_x + card_w, eq_y + card_h], radius=RADIUS, fill=COLORS["card"])
         draw.text((victim_card_x + 12 * SCALE, eq_y + 10 * SCALE), v_name, fill=(248, 113, 113), font=font_heading)
@@ -132,6 +113,50 @@ class ImageRenderer:
             draw.text((victim_card_x + 12 * SCALE, eq_y + 30 * SCALE), f"[{v_guild}]", fill=COLORS["muted_fg"], font=font_small)
         draw.text((victim_card_x + 12 * SCALE, eq_y + 48 * SCALE), f"IP: {v_ip:.0f}", fill=COLORS["muted"], font=font_tiny)
         self._draw_build(draw, img, v_equip, victim_card_x + 12 * SCALE, eq_y + 60 * SCALE)
+
+        # === ЦЕНТР — Статистика ===
+        center_x = self.width // 2
+        center_y = eq_y + card_h // 2
+
+        stats_box_w = 130 * SCALE
+        stats_box_h = 130 * SCALE
+        draw.rounded_rectangle(
+            [center_x - stats_box_w // 2, center_y - stats_box_h // 2,
+             center_x + stats_box_w // 2, center_y + stats_box_h // 2],
+            radius=10 * SCALE, fill=COLORS["card"]
+        )
+        draw.rounded_rectangle(
+            [center_x - stats_box_w // 2, center_y - stats_box_h // 2,
+             center_x + stats_box_w // 2, center_y + stats_box_h // 2],
+            radius=10 * SCALE, outline=COLORS["border"], width=1 * SCALE
+        )
+
+        # FAME
+        fame_label = "FAME"
+        flw = draw.textlength(fame_label, font=font_tiny)
+        draw.text((center_x - flw // 2, center_y - 46 * SCALE), fame_label, fill=COLORS["muted"], font=font_tiny)
+        fame_value = f"{fame:,}"
+        fvw = draw.textlength(fame_value, font=font_heading)
+        draw.text((center_x - fvw // 2, center_y - 30 * SCALE), fame_value, fill=COLORS["warning"], font=font_heading)
+
+        # SILVER
+        silver_label = "SILVER"
+        slw = draw.textlength(silver_label, font=font_tiny)
+        draw.text((center_x - slw // 2, center_y - 4 * SCALE), silver_label, fill=COLORS["muted"], font=font_tiny)
+        silver_value = format_silver(silver_lost) if silver_lost > 0 else "0"
+        svw = draw.textlength(silver_value, font=font_text)
+        draw.text((center_x - svw // 2, center_y + 12 * SCALE), silver_value, fill=COLORS["silver"], font=font_text)
+
+        # KILL / DEATH
+        status_label = "GUILD KILL" if is_kill else "GUILD DEATH"
+        status_color = COLORS["success"] if is_kill else COLORS["destructive"]
+        stlw = draw.textlength(status_label, font=font_small)
+        draw.rounded_rectangle(
+            [center_x - stlw // 2 - 10 * SCALE, center_y + 34 * SCALE,
+             center_x + stlw // 2 + 10 * SCALE, center_y + 54 * SCALE],
+            radius=4 * SCALE, fill=status_color
+        )
+        draw.text((center_x - stlw // 2, center_y + 36 * SCALE), status_label, fill=(255, 255, 255), font=font_small)
 
         # === COMBAT STATS ===
         stats_y = eq_y + card_h + 16 * SCALE
