@@ -614,3 +614,75 @@ async def battleboard(interaction: discord.Interaction, event_id: int):
     event = await get_event_details(event_id)
     if not event:
         await interaction.followup.send(t("battle_not_found", id=event_id))
+        return
+
+    embed, file = create_battle_embed(event, f"⚔️ Бій #{event_id}", 0xe67e22)
+    await interaction.followup.send(embed=embed, file=file)
+
+@bot.tree.command(name="checkapi", description="Перевірка API Albion Online")
+async def checkapi(interaction: discord.Interaction):
+    await interaction.response.defer()
+    try:
+        events = await get_events(limit=1)
+        if events:
+            event = events[0]
+            embed = discord.Embed(title="🌐 Статус API", color=0x2ecc71)
+            embed.add_field(name="🟢 Стан", value="Працює!", inline=False)
+            embed.add_field(name="📊 Остання подія", value=f"`{event.get('EventId', '?')}`", inline=True)
+            await interaction.followup.send(embed=embed)
+        else:
+            await interaction.followup.send(t("empty_api"))
+    except Exception as e:
+        await interaction.followup.send(t("api_error", error=str(e)))
+
+@bot.tree.command(name="guild", description="Інформація про гільдію")
+async def guild(interaction: discord.Interaction):
+    await interaction.response.defer()
+    data = await get_guild_info(GUILD_ID)
+    if not data:
+        await interaction.followup.send("❌ Не вдалося отримати дані.")
+        return
+
+    embed = discord.Embed(title=f"🏰 {data.get('Name', '?')}", color=0x3498db)
+    embed.add_field(name="👑 Лідер", value=data.get('FounderName', '—'), inline=True)
+    embed.add_field(name="👥 Учасників", value=f"{data.get('MemberCount', 0)} / 300", inline=True)
+    embed.add_field(name="⚔️ Kill Fame", value=f"{data.get('KillFame', 0):,}", inline=True)
+    embed.add_field(name="💀 Death Fame", value=f"{data.get('DeathFame', 0):,}", inline=True)
+    await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="status", description="Статус моніторингу")
+async def status(interaction: discord.Interaction):
+    embed = discord.Embed(title="📊 Статус", color=0x9b59b6)
+    embed.add_field(name="🔄 Циклів", value=f"`{_cycle_count}`", inline=True)
+    embed.add_field(name="📡 Подій", value=f"`{_total_events_scanned:,}`", inline=True)
+    embed.add_field(name="🎯 Гільдія", value=f"`{_total_guild_events}`", inline=True)
+    embed.add_field(name="📅 Сьогодні", value=f"⚔️ {_daily_kills} | 💀 {_daily_deaths} | 🤝 {_daily_assists}\n🏆 {_daily_fame:,} fame", inline=False)
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="lang", description="Змінити мову бота")
+async def lang(interaction: discord.Interaction, language: str):
+    global _current_lang
+    if language.lower() not in TRANSLATIONS:
+        await interaction.response.send_message("❌ Доступні мови: `ua`, `ru`, `en`", ephemeral=True)
+        return
+    _current_lang = language.lower()
+    await interaction.response.send_message(t("lang_set"))
+
+@bot.tree.command(name="info", description="Список команд")
+async def info(interaction: discord.Interaction):
+    embed = discord.Embed(title="📖 x E C L I P S E x — Killboard Bot", description="Слеш-команди з картками екіпіровки", color=0xf39c12)
+    embed.add_field(name="/scan", value="Скан 51 подій гільдії з картками", inline=False)
+    embed.add_field(name="/scanlive", value="Швидкий скан 20 подій з картками", inline=False)
+    embed.add_field(name="/lastkills [n]", value="Останні n кілів з картками (макс 20)", inline=False)
+    embed.add_field(name="/top [період]", value="Топ-10 кілерів гільдії", inline=False)
+    embed.add_field(name="/player [ім'я]", value="Статистика гравця", inline=False)
+    embed.add_field(name="/battleboard [ID]", value="Деталі бою з карткою", inline=False)
+    embed.add_field(name="/guild", value="Інфо гільдії", inline=False)
+    embed.add_field(name="/status", value="Статус моніторингу", inline=False)
+    embed.add_field(name="/lang [ua/ru/en]", value="Зміна мови", inline=False)
+    embed.add_field(name="/checkapi", value="Перевірка API", inline=False)
+    await interaction.response.send_message(embed=embed)
+
+# Запуск
+keep_alive()
+bot.run(TOKEN)
