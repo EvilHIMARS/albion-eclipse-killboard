@@ -1,5 +1,6 @@
 """Генератор PNG-карточек киллов/смертей — shadcn/ui Dark Style x2."""
 import io
+import math
 import logging
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
@@ -110,27 +111,21 @@ class ImageRenderer:
             radius=10 * SCALE, outline=COLORS["border"], width=1 * SCALE
         )
 
-        # Иконка фейма + значение
-        fame_icon = self.api.fetch_icon("QUESTITEM_TOKEN_KEEPER_FAME")
-        if fame_icon:
-            try:
-                fi = Image.open(io.BytesIO(fame_icon)).convert("RGBA").resize((26 * SCALE, 26 * SCALE))
-                img.paste(fi, (center_x - 58 * SCALE, center_y - 50 * SCALE), fi)
-            except:
-                pass
+        # Звезда фейма
+        fame_icon_x = center_x - 58 * SCALE
+        fame_icon_y = center_y - 50 * SCALE
+        fame_icon_size = 26 * SCALE
+        self._draw_fame_star(draw, fame_icon_x, fame_icon_y, fame_icon_size)
 
         fame_value = f"{fame:,}"
         fvw = draw.textlength(fame_value, font=font_text)
         draw.text((center_x - fvw // 2, center_y - 18 * SCALE), fame_value, fill=COLORS["warning"], font=font_text)
 
-        # Иконка серебра + значение
-        silver_icon = self.api.fetch_icon("QUESTITEM_TOKEN_KEEPER_SILVER")
-        if silver_icon:
-            try:
-                si = Image.open(io.BytesIO(silver_icon)).convert("RGBA").resize((26 * SCALE, 26 * SCALE))
-                img.paste(si, (center_x - 58 * SCALE, center_y + 6 * SCALE), si)
-            except:
-                pass
+        # Монета серебра
+        silver_icon_x = center_x - 58 * SCALE
+        silver_icon_y = center_y + 6 * SCALE
+        silver_icon_size = 26 * SCALE
+        self._draw_silver_coin(draw, silver_icon_x, silver_icon_y, silver_icon_size)
 
         silver_value = format_silver(silver_lost) if silver_lost > 0 else "0"
         svw = draw.textlength(silver_value, font=font_text)
@@ -245,3 +240,34 @@ class ImageRenderer:
             return int(item_type[1])
         except:
             return 4
+
+    def _draw_fame_star(self, draw, x, y, size):
+        """Рисует звезду фейма."""
+        r = size // 2
+        cx, cy = x + r, y + r
+        color = COLORS["warning"]
+        points = []
+        for i in range(5):
+            angle = math.pi / 2 + i * 2 * math.pi / 5
+            outer_x = cx + r * math.cos(angle)
+            outer_y = cy - r * math.sin(angle)
+            points.append((outer_x, outer_y))
+            angle += math.pi / 5
+            inner_x = cx + r * 0.4 * math.cos(angle)
+            inner_y = cy - r * 0.4 * math.sin(angle)
+            points.append((inner_x, inner_y))
+        draw.polygon(points, fill=color)
+
+    def _draw_silver_coin(self, draw, x, y, size):
+        """Рисует монету серебра."""
+        r = size // 2
+        cx, cy = x + r, y + r
+        draw.ellipse([x, y, x + size, y + size], fill=(150, 150, 160))
+        draw.ellipse([x + 3, y + 3, x + size - 3, y + size - 3], fill=(180, 180, 190))
+        try:
+            font_coin = ImageFont.truetype("DejaVuSans-Bold.ttf", size // 2)
+        except:
+            font_coin = ImageFont.load_default()
+        text = "$"
+        tw = draw.textlength(text, font=font_coin)
+        draw.text((cx - tw // 2, cy - size // 4), text, fill=(120, 120, 130), font=font_coin)
