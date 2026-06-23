@@ -224,7 +224,7 @@ def _event_to_dict(event):
     }
 
 def create_battle_embed(event, title, color_hex):
-    event_id = event.get("EventId", 0)
+    #event_id = event.get("EventId", 0)
     killer = event.get("Killer") or {}
     victim = event.get("Victim") or {}
     fame = event.get("TotalVictimKillFame", 0)
