@@ -111,21 +111,17 @@ class ImageRenderer:
             radius=10 * SCALE, outline=COLORS["border"], width=1 * SCALE
         )
 
-        # Звезда фейма
-        fame_icon_x = center_x - 58 * SCALE
-        fame_icon_y = center_y - 50 * SCALE
+        # Звезда фейма по центру
         fame_icon_size = 26 * SCALE
-        self._draw_fame_star(draw, fame_icon_x, fame_icon_y, fame_icon_size)
+        self._draw_fame_star(draw, center_x - fame_icon_size // 2, center_y - 50 * SCALE, fame_icon_size)
 
         fame_value = f"{fame:,}"
         fvw = draw.textlength(fame_value, font=font_text)
         draw.text((center_x - fvw // 2, center_y - 18 * SCALE), fame_value, fill=COLORS["warning"], font=font_text)
 
-        # Монета серебра
-        silver_icon_x = center_x - 58 * SCALE
-        silver_icon_y = center_y + 6 * SCALE
+        # Монета серебра по центру
         silver_icon_size = 26 * SCALE
-        self._draw_silver_coin(draw, silver_icon_x, silver_icon_y, silver_icon_size)
+        self._draw_silver_coin(draw, center_x - silver_icon_size // 2, center_y + 6 * SCALE, silver_icon_size)
 
         silver_value = format_silver(silver_lost) if silver_lost > 0 else "0"
         svw = draw.textlength(silver_value, font=font_text)
