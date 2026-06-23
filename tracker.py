@@ -3,7 +3,6 @@ import os
 def is_guild_kill(event):
     """
     Перевіряє, яке відношення має наша гільдія до цієї події.
-    Бере GUILD_ID прямо під час виклику, щоб уникнути багів з імпортами.
     """
     guild_id = os.getenv("GUILD_ID")
     
@@ -11,26 +10,27 @@ def is_guild_kill(event):
         print("[TRACKER ERROR] GUILD_ID не знайдено в змінних оточення!")
         return None
 
-    # Отримуємо дані вбивці та жертви
     killer = event.get("Killer") or {}
     victim = event.get("Victim") or {}
     
-    killer_guild = killer.get("GuildId")
-    victim_guild = victim.get("GuildId")
+    killer_guild = str(killer.get("GuildId", ""))
+    victim_guild = str(victim.get("GuildId", ""))
+    guild_id_str = str(guild_id)
 
-    # 1. СМЕРТЬ: Якщо ID гільдії жертви збігається з нашим
-    if victim_guild == guild_id:
+    # 1. СМЕРТЬ: жертва из нашей гильдии
+    if victim_guild == guild_id_str:
         return "death"
 
-    # 2. ВБИВСТВО: Якщо ID гільдії головного вбивці збігається з нашим
-    if killer_guild == guild_id:
+    # 2. УБИЙСТВО: убийца из нашей гильдии
+    if killer_guild == guild_id_str:
         return "kill"
 
-    # 3. АСИСТ: Перевіряємо, чи допомагав хтось із нашої гільдії в списку учасників
+    # 3. АСИСТ: проверяем участников
     participants = event.get("Participants") or []
     for p in participants:
-        if isinstance(p, dict) and p.get("GuildId") == guild_id:
-            return "assist"
+        if isinstance(p, dict):
+            p_guild = str(p.get("GuildId", ""))
+            if p_guild == guild_id_str:
+                return "assist"
 
-    # Подія не має відношення до нашої гільдії
     return None
