@@ -40,20 +40,19 @@ class ImageRenderer:
     def __init__(self, render_api: RenderAPI):
         self.api = render_api
         self.width = 780 * SCALE
-        self.height = 680 * SCALE
+        self.height = 580 * SCALE
 
     def render(self, event_data: dict, is_kill: bool) -> io.BytesIO:
         img = Image.new("RGBA", (self.width, self.height), COLORS["bg"])
         draw = ImageDraw.Draw(img)
 
         try:
-            font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 18 * SCALE)
             font_heading = ImageFont.truetype("DejaVuSans-Bold.ttf", 14 * SCALE)
             font_text = ImageFont.truetype("DejaVuSans.ttf", 13 * SCALE)
             font_small = ImageFont.truetype("DejaVuSans.ttf", 11 * SCALE)
             font_tiny = ImageFont.truetype("DejaVuSans.ttf", 10 * SCALE)
         except:
-            font_title = font_heading = font_text = font_small = font_tiny = ImageFont.load_default()
+            font_heading = font_text = font_small = font_tiny = ImageFont.load_default()
 
         killer = event_data.get("Killer", {}) or {}
         victim = event_data.get("Victim", {}) or {}
@@ -68,28 +67,8 @@ class ImageRenderer:
         v_equip = victim.get("Equipment") or {}
         silver_lost = estimate_total_loss(v_equip)
 
-        # === HEADER ===
-        header_h = 100 * SCALE
-        draw.rounded_rectangle([PADDING, PADDING, self.width - PADDING, PADDING + header_h], radius=RADIUS, fill=COLORS["card"])
-
-        badge_w = 140 * SCALE
-        badge_h = 30 * SCALE
-        badge_x = PADDING + 16 * SCALE
-        badge_y = PADDING + 16 * SCALE
-        badge_color = COLORS["success"] if is_kill else COLORS["destructive"]
-        draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=6 * SCALE, fill=badge_color)
-        badge_text = "Guild Kill" if is_kill else "Guild Death"
-        btw = draw.textlength(badge_text, font=font_small)
-        draw.text((badge_x + badge_w // 2 - btw // 2, badge_y + 7 * SCALE), badge_text, fill=(255, 255, 255), font=font_small)
-
-        title = f"{k_name} killed {v_name}"
-        tw = draw.textlength(title, font=font_title)
-        if tw > self.width - 220 * SCALE:
-            title = f"{k_name[:10]}.. killed {v_name[:10]}.."
-        draw.text((badge_x + badge_w + 16 * SCALE, badge_y + 2 * SCALE), title, fill=COLORS["foreground"], font=font_title)
-
         # === EQUIPMENT ===
-        eq_y = PADDING + header_h + 16 * SCALE
+        eq_y = PADDING
         k_equip = killer.get("Equipment") or {}
         grid_w = 3 * (ICON_SIZE + GAP) - GAP
         grid_h = 4 * (ICON_SIZE + GAP) - GAP
