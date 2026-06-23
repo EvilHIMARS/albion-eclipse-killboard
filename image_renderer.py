@@ -80,7 +80,8 @@ class ImageRenderer:
             radius=RADIUS, fill=COLORS["card"]
         )
 
-        badge_w = 90 * SCALE
+        # Status badge — локализированный текст
+        badge_w = 140 * SCALE
         badge_h = 30 * SCALE
         badge_x = PADDING + 16 * SCALE
         badge_y = PADDING + 16 * SCALE
@@ -89,22 +90,21 @@ class ImageRenderer:
             [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
             radius=6 * SCALE, fill=badge_color
         )
-        badge_text = "VICTORY" if is_kill else "DEFEAT"
+        if is_kill:
+            badge_text = "Guild Kill"
+        else:
+            badge_text = "Guild Death"
         btw = draw.textlength(badge_text, font=font_small)
         draw.text((badge_x + badge_w//2 - btw//2, badge_y + 7 * SCALE), badge_text, fill=(255,255,255), font=font_small)
 
+        # Title
         title = f"{k_name} killed {v_name}"
         tw = draw.textlength(title, font=font_title)
-        if tw > self.width - 200 * SCALE:
+        if tw > self.width - 220 * SCALE:
             title = f"{k_name[:10]}.. killed {v_name[:10]}.."
         draw.text((badge_x + badge_w + 16 * SCALE, badge_y + 2 * SCALE), title, fill=COLORS["foreground"], font=font_title)
 
-        draw.text((PADDING + 20 * SCALE, PADDING + 56 * SCALE), "Killer", fill=COLORS["muted"], font=font_tiny)
-        draw.text((PADDING + 20 * SCALE, PADDING + 72 * SCALE), k_name, fill=COLORS["foreground"], font=font_text)
-        if k_guild:
-            gw = draw.textlength(f"[{k_guild}]", font=font_small)
-            draw.text((self.width - PADDING - 20 * SCALE - gw, PADDING + 56 * SCALE), f"[{k_guild}]", fill=COLORS["muted_fg"], font=font_small)
-
+        # Fame badge
         fame_text = f"Fame: {fame:,}"
         ftw = draw.textlength(fame_text, font=font_text)
         draw.rounded_rectangle(
@@ -123,32 +123,37 @@ class ImageRenderer:
         grid_w = 3 * (ICON_SIZE + GAP) - GAP
         grid_h = 4 * (ICON_SIZE + GAP) - GAP
         card_w = grid_w + 24 * SCALE
-        card_h = grid_h + 40 * SCALE
+        card_h = grid_h + 70 * SCALE  # +место для имени
 
+        # KILLER CARD
         killer_card_x = PADDING
         draw.rounded_rectangle(
             [killer_card_x, eq_y, killer_card_x + card_w, eq_y + card_h],
             radius=RADIUS, fill=COLORS["card"]
         )
-        draw.text((killer_card_x + 12 * SCALE, eq_y + 12 * SCALE), "KILLER BUILD", fill=COLORS["muted"], font=font_small)
-        self._draw_build(draw, img, k_equip, killer_card_x + 12 * SCALE, eq_y + 32 * SCALE)
 
+        # Имя и гильдия убийцы НАД сеткой
+        draw.text((killer_card_x + 12 * SCALE, eq_y + 10 * SCALE), k_name, fill=COLORS["foreground"], font=font_heading)
+        if k_guild:
+            draw.text((killer_card_x + 12 * SCALE, eq_y + 30 * SCALE), f"[{k_guild}]", fill=COLORS["muted_fg"], font=font_small)
+        draw.text((killer_card_x + 12 * SCALE, eq_y + 48 * SCALE), f"IP: {k_ip:.0f}", fill=COLORS["muted"], font=font_tiny)
+
+        self._draw_build(draw, img, k_equip, killer_card_x + 12 * SCALE, eq_y + 60 * SCALE)
+
+        # VICTIM CARD
         victim_card_x = self.width - PADDING - card_w
         draw.rounded_rectangle(
             [victim_card_x, eq_y, victim_card_x + card_w, eq_y + card_h],
             radius=RADIUS, fill=COLORS["card"]
         )
-        draw.text((victim_card_x + 12 * SCALE, eq_y + 12 * SCALE), "VICTIM BUILD", fill=COLORS["muted"], font=font_small)
-        self._draw_build(draw, img, v_equip, victim_card_x + 12 * SCALE, eq_y + 32 * SCALE)
 
-        center_x = self.width // 2
-        center_y = eq_y + card_h // 2
-        draw.rounded_rectangle(
-            [center_x - 50 * SCALE, center_y - 35 * SCALE, center_x + 50 * SCALE, center_y + 35 * SCALE],
-            radius=8 * SCALE, fill=COLORS["card"]
-        )
-        draw.text((center_x - 30 * SCALE, center_y - 18 * SCALE), f"IP K: {k_ip:.0f}", fill=COLORS["muted_fg"], font=font_small)
-        draw.text((center_x - 30 * SCALE, center_y), f"IP V: {v_ip:.0f}", fill=COLORS["muted_fg"], font=font_small)
+        # Имя и гильдия жертвы НАД сеткой
+        draw.text((victim_card_x + 12 * SCALE, eq_y + 10 * SCALE), v_name, fill=(248, 113, 113), font=font_heading)
+        if v_guild:
+            draw.text((victim_card_x + 12 * SCALE, eq_y + 30 * SCALE), f"[{v_guild}]", fill=COLORS["muted_fg"], font=font_small)
+        draw.text((victim_card_x + 12 * SCALE, eq_y + 48 * SCALE), f"IP: {v_ip:.0f}", fill=COLORS["muted"], font=font_tiny)
+
+        self._draw_build(draw, img, v_equip, victim_card_x + 12 * SCALE, eq_y + 60 * SCALE)
 
         # === COMBAT STATS CARD ===
         stats_y = eq_y + card_h + 16 * SCALE
