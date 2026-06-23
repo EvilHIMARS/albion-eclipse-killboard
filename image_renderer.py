@@ -40,7 +40,7 @@ class ImageRenderer:
     def __init__(self, render_api: RenderAPI):
         self.api = render_api
         self.width = 780 * SCALE
-        self.height = 580 * SCALE
+        self.height = 620 * SCALE
 
     def render(self, event_data: dict, is_kill: bool) -> io.BytesIO:
         img = Image.new("RGBA", (self.width, self.height), COLORS["bg"])
@@ -97,8 +97,8 @@ class ImageRenderer:
         center_x = self.width // 2
         center_y = eq_y + card_h // 2
 
-        stats_box_w = 130 * SCALE
-        stats_box_h = 130 * SCALE
+        stats_box_w = 140 * SCALE
+        stats_box_h = 150 * SCALE
         draw.rounded_rectangle(
             [center_x - stats_box_w // 2, center_y - stats_box_h // 2,
              center_x + stats_box_w // 2, center_y + stats_box_h // 2],
@@ -110,32 +110,42 @@ class ImageRenderer:
             radius=10 * SCALE, outline=COLORS["border"], width=1 * SCALE
         )
 
-        # FAME
-        fame_label = "FAME"
-        flw = draw.textlength(fame_label, font=font_tiny)
-        draw.text((center_x - flw // 2, center_y - 46 * SCALE), fame_label, fill=COLORS["muted"], font=font_tiny)
-        fame_value = f"{fame:,}"
-        fvw = draw.textlength(fame_value, font=font_heading)
-        draw.text((center_x - fvw // 2, center_y - 30 * SCALE), fame_value, fill=COLORS["warning"], font=font_heading)
+        # Иконка фейма + значение
+        fame_icon = self.api.fetch_icon("QUESTITEM_TOKEN_KEEPER_FAME")
+        if fame_icon:
+            try:
+                fi = Image.open(io.BytesIO(fame_icon)).convert("RGBA").resize((26 * SCALE, 26 * SCALE))
+                img.paste(fi, (center_x - 58 * SCALE, center_y - 50 * SCALE), fi)
+            except:
+                pass
 
-        # SILVER
-        silver_label = "SILVER"
-        slw = draw.textlength(silver_label, font=font_tiny)
-        draw.text((center_x - slw // 2, center_y - 4 * SCALE), silver_label, fill=COLORS["muted"], font=font_tiny)
+        fame_value = f"{fame:,}"
+        fvw = draw.textlength(fame_value, font=font_text)
+        draw.text((center_x - fvw // 2, center_y - 18 * SCALE), fame_value, fill=COLORS["warning"], font=font_text)
+
+        # Иконка серебра + значение
+        silver_icon = self.api.fetch_icon("QUESTITEM_TOKEN_KEEPER_SILVER")
+        if silver_icon:
+            try:
+                si = Image.open(io.BytesIO(silver_icon)).convert("RGBA").resize((26 * SCALE, 26 * SCALE))
+                img.paste(si, (center_x - 58 * SCALE, center_y + 6 * SCALE), si)
+            except:
+                pass
+
         silver_value = format_silver(silver_lost) if silver_lost > 0 else "0"
         svw = draw.textlength(silver_value, font=font_text)
-        draw.text((center_x - svw // 2, center_y + 12 * SCALE), silver_value, fill=COLORS["silver"], font=font_text)
+        draw.text((center_x - svw // 2, center_y + 38 * SCALE), silver_value, fill=COLORS["silver"], font=font_text)
 
         # KILL / DEATH
         status_label = "GUILD KILL" if is_kill else "GUILD DEATH"
         status_color = COLORS["success"] if is_kill else COLORS["destructive"]
         stlw = draw.textlength(status_label, font=font_small)
         draw.rounded_rectangle(
-            [center_x - stlw // 2 - 10 * SCALE, center_y + 34 * SCALE,
-             center_x + stlw // 2 + 10 * SCALE, center_y + 54 * SCALE],
+            [center_x - stlw // 2 - 10 * SCALE, center_y + 58 * SCALE,
+             center_x + stlw // 2 + 10 * SCALE, center_y + 78 * SCALE],
             radius=4 * SCALE, fill=status_color
         )
-        draw.text((center_x - stlw // 2, center_y + 36 * SCALE), status_label, fill=(255, 255, 255), font=font_small)
+        draw.text((center_x - stlw // 2, center_y + 60 * SCALE), status_label, fill=(255, 255, 255), font=font_small)
 
         # === COMBAT STATS ===
         stats_y = eq_y + card_h + 16 * SCALE
