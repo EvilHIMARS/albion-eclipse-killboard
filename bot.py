@@ -224,7 +224,7 @@ def _event_to_dict(event):
     }
 
 def create_battle_embed(event, title, color_hex):
-    #event_id = event.get("EventId", 0)
+    event_id = event.get("EventId", 0)
     killer = event.get("Killer") or {}
     victim = event.get("Victim") or {}
     fame = event.get("TotalVictimKillFame", 0)
@@ -243,10 +243,10 @@ def create_battle_embed(event, title, color_hex):
         title=title,
         url=killboard_url,
         color=color_hex,
-        description=f"**{killer_name}** `[{killer_guild}]` IP:{killer_ip:.0f} ☠️ **{victim_name}** `[{victim_guild}]` IP:{victim_ip:.0f}\n🏆 Fame: **{fame:,}**\n{t('open_killboard')}({killboard_url})"
+        description=f"**{killer_name}** `[{killer_guild}]` IP:{killer_ip:.0f} ☠️ **{victim_name}** `[{victim_guild}]` IP:{victim_ip:.0f}\n🏆 Fame: **{fame:,}**"
     )
     embed.set_image(url="attachment://killcard.png")
-    embed.set_footer(text=f"ID: {event_id} | Dev: EvilHIMARS")
+    embed.set_footer(text="Albion Eclipse Killboard | Dev: EvilHIMARS")
 
     event_dict = _event_to_dict(event)
     is_kill = "KILL" in title.upper() or "ASSIST" in title.upper() or "ВБИВСТВО" in title.upper() or "УБИЙСТВО" in title.upper() or "АСИСТ" in title.upper()
@@ -622,13 +622,18 @@ async def battleboard(interaction: discord.Interaction, event_id: int):
 @bot.tree.command(name="checkapi", description="Перевірка API Albion Online")
 async def checkapi(interaction: discord.Interaction):
     await interaction.response.defer()
+    logger.info(f"🔧 /checkapi від {interaction.user}")
     try:
         events = await get_events(limit=1)
-        if events:
+        if events and isinstance(events, list):
             event = events[0]
+            event_id = event.get('EventId', '?')
+            timestamp = event.get('TimeStamp', '?')
+            
             embed = discord.Embed(title="🌐 Статус API", color=0x2ecc71)
             embed.add_field(name="🟢 Стан", value="Працює!", inline=False)
-            embed.add_field(name="📊 Остання подія", value=f"`{event.get('EventId', '?')}`", inline=True)
+            embed.add_field(name="📊 Остання подія", value=f"`{event_id}`", inline=True)
+            embed.add_field(name="🕒 Час (UTC)", value=f"`{timestamp}`", inline=True)
             await interaction.followup.send(embed=embed)
         else:
             await interaction.followup.send(t("empty_api"))
