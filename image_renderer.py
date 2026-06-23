@@ -8,21 +8,54 @@ from cache_manager import IconCache
 
 logger = logging.getLogger(__name__)
 
-# Слоты и их позиции на карточке (x, y)
-SLOTS = {
-    "MainHand": (20, 170),
-    "OffHand": (90, 170),
-    "Head": (160, 170),
-    "Armor": (230, 170),
-    "Shoes": (300, 170),
-    "Cape": (370, 170),
-    "Bag": (440, 170),
-    "Mount": (510, 170),
-    "Food": (580, 170),
-    "Potion": (650, 170),
+# Слоты для матрицы (слева Killer, справа Victim)
+SLOT_LAYOUT = {
+    "killer": {
+        "MainHand": (0, 0),
+        "OffHand":  (0, 1),
+        "Head":     (0, 2),
+        "Armor":    (1, 0),
+        "Shoes":    (1, 1),
+        "Cape":     (1, 2),
+        "Bag":      (2, 0),
+        "Mount":    (2, 1),
+        "Food":     (3, 0),
+        "Potion":   (3, 1),
+    },
+    "victim": {
+        "MainHand": (0, 0),
+        "OffHand":  (0, 1),
+        "Head":     (0, 2),
+        "Armor":    (1, 0),
+        "Shoes":    (1, 1),
+        "Cape":     (1, 2),
+        "Bag":      (2, 0),
+        "Mount":    (2, 1),
+        "Food":     (3, 0),
+        "Potion":   (3, 1),
+    },
 }
 
-# Цвета по Tier
+SLOT_LABELS = {
+    "MainHand": "Weapon",
+    "OffHand": "Offhand",
+    "Head": "Helmet",
+    "Armor": "Armor",
+    "Shoes": "Shoes",
+    "Cape": "Cape",
+    "Bag": "Bag",
+    "Mount": "Mount",
+    "Food": "Food",
+    "Potion": "Potion",
+}
+
+ICON_SIZE = 52
+COL_SPACING = 70
+ROW_SPACING = 66
+MATRIX_START_X_KILLER = 30
+MATRIX_START_Y = 155
+MATRIX_START_X_VICTIM = 380
+
 TIER_COLORS = {
     4: (100, 140, 200),
     5: (100, 180, 120),
@@ -35,35 +68,37 @@ TIER_COLORS = {
 class ImageRenderer:
     def __init__(self, render_api: RenderAPI):
         self.api = render_api
-        self.width = 740
-        self.height = 280
-        self.bg = (30, 30, 35)
-        self.panel_bg = (40, 40, 48)
-        self.accent = (200, 50, 50)
+        self.width = 700
+        self.height = 420
+        self.bg = (20, 20, 28)
+        self.panel_bg = (30, 30, 40)
+        self.accent = (200, 55, 55)
         self.green = (50, 180, 80)
 
-    def render(self, event, is_kill: bool) -> io.BytesIO:
+    def render(self, event_data: dict, is_kill: bool) -> io.BytesIO:
         img = Image.new("RGBA", (self.width, self.height), self.bg)
         draw = ImageDraw.Draw(img)
 
-        # Шрифт
+        # Шрифты
         try:
-            font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 18)
-            font_text = ImageFont.truetype("DejaVuSans.ttf", 14)
-            font_small = ImageFont.truetype("DejaVuSans.ttf", 11)
+            font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 16)
+            font_text = ImageFont.truetype("DejaVuSans.ttf", 13)
+            font_small = ImageFont.truetype("DejaVuSans.ttf", 10)
+            font_tiny = ImageFont.truetype("DejaVuSans.ttf", 9)
         except:
             font_title = ImageFont.load_default()
             font_text = font_title
             font_small = font_title
+            font_tiny = font_title
 
         # Верхняя полоса
         color = self.green if is_kill else self.accent
-        draw.rectangle([0, 0, self.width, 40], fill=color)
+        draw.rectangle([0, 0, self.width, 36], fill=color)
         status = "⚔ KILL" if is_kill else "☠ DEATH"
-        draw.text((15, 10), status, fill=(255, 255, 255), font=font_title)
+        draw.text((15, 8), status, fill=(255, 255, 255), font=font_title)
 
         # Timestamp
-        ts = event.get("TimeStamp", "")
+        ts = event_data.get("TimeStamp", "")
         if ts:
             try:
                 dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
@@ -71,73 +106,86 @@ class ImageRenderer:
             except:
                 ts_str = ts
             tw = draw.textlength(ts_str, font=font_small)
-            draw.text((self.width - tw - 15, 13), ts_str, fill=(200, 200, 200), font=font_small)
+            draw.text((self.width - tw - 12, 10), ts_str, fill=(200, 200, 200), font=font_small)
+
+        # Инфо-панель (Killer / Victim)
+        killer = event_data.get("Killer", {})
+        victim = event_data.get("Victim", {})
+        k_name = killer.get("Name", "Unknown") if isinstance(killer, dict) else "Unknown"
+        v_name = victim.get("Name", "Unknown") if isinstance(victim, dict) else "Unknown"
+        k_guild = killer.get("GuildName", "") if isinstance(killer, dict) else ""
+        v_guild = victim.get("GuildName", "") if isinstance(victim, dict) else ""
+        k_ip = killer.get("AverageItemPower", 0) if isinstance(killer, dict) else 0
+        v_ip = victim.get("AverageItemPower", 0) if isinstance(victim, dict) else 0
+        fame = event_data.get("TotalVictimKillFame", 0)
 
         # Панель инфы
-        draw.rounded_rectangle([15, 50, self.width - 15, 140], radius=8, fill=self.panel_bg)
+        draw.rounded_rectangle([12, 44, self.width - 12, 140], radius=8, fill=self.panel_bg)
 
-        # Killer / Victim
-        killer = event.get("Killer", {}).get("Name", "Unknown")
-        victim = event.get("Victim", {}).get("Name", "Unknown")
-        killer_guild = event.get("Killer", {}).get("GuildName", "")
-        victim_guild = event.get("Victim", {}).get("GuildName", "")
+        # Заголовки колонок
+        draw.text((MATRIX_START_X_KILLER + 10, 48), k_name, fill=(255, 255, 255), font=font_text)
+        if k_guild:
+            draw.text((MATRIX_START_X_KILLER + 10, 66), f"[{k_guild}]", fill=(150, 150, 150), font=font_small)
+        draw.text((MATRIX_START_X_KILLER + 10, 84), f"IP: {k_ip:.0f}", fill=(200, 200, 200), font=font_small)
 
-        if is_kill:
-            draw.text((30, 58), f"Убийца: {killer}", fill=(255, 255, 255), font=font_text)
-            draw.text((30, 80), f"Цель: {victim}", fill=(255, 100, 100), font=font_text)
-            if killer_guild:
-                draw.text((30, 102), f"Гильдия: {killer_guild}", fill=(180, 180, 180), font=font_small)
-            if victim_guild:
-                draw.text((30, 120), f"Гильдия цели: {victim_guild}", fill=(180, 180, 180), font=font_small)
-        else:
-            draw.text((30, 58), f"Убийца: {killer}", fill=(255, 100, 100), font=font_text)
-            draw.text((30, 80), f"Цель: {victim}", fill=(255, 255, 255), font=font_text)
-            if killer_guild:
-                draw.text((30, 102), f"Гильдия убийцы: {killer_guild}", fill=(180, 180, 180), font=font_small)
-            if victim_guild:
-                draw.text((30, 120), f"Гильдия: {victim_guild}", fill=(180, 180, 180), font=font_small)
+        draw.text((MATRIX_START_X_VICTIM + 10, 48), v_name, fill=(255, 100, 100), font=font_text)
+        if v_guild:
+            draw.text((MATRIX_START_X_VICTIM + 10, 66), f"[{v_guild}]", fill=(150, 150, 150), font=font_small)
+        draw.text((MATRIX_START_X_VICTIM + 10, 84), f"IP: {v_ip:.0f}", fill=(200, 200, 200), font=font_small)
 
-        # Fame
-        fame = event.get("TotalVictimKillFame", 0)
-        draw.text((400, 58), f"Fame: {fame:,}", fill=(255, 200, 100), font=font_text)
+        # Fame по центру
+        fame_text = f"Fame: {fame:,}"
+        fw = draw.textlength(fame_text, font=font_text)
+        draw.text((self.width // 2 - fw // 2, 110), fame_text, fill=(255, 200, 80), font=font_text)
 
-        # Equip
-        equip = event.get("Equipment", {})
-        for slot, (sx, sy) in SLOTS.items():
-            item = equip.get(slot)
-            if item and isinstance(item, dict):
-                item_type = item.get("Type", "")
-            elif item and isinstance(item, str):
-                item_type = item
-            else:
-                item_type = ""
+        # Разделитель
+        draw.line([12, 145, self.width - 12, 145], fill=(60, 60, 75), width=1)
 
-            if item_type:
-                icon_data = self.api.fetch_icon(item_type)
-                try:
-                    icon = Image.open(io.BytesIO(icon_data)).convert("RGBA").resize((56, 56))
-                except:
-                    icon = Image.new("RGBA", (56, 56), (40, 40, 40))
-                img.paste(icon, (sx, sy), icon)
+        # Матрицы экипировки
+        k_equip = (killer.get("Equipment") if isinstance(killer, dict) else {}) or {}
+        v_equip = (victim.get("Equipment") if isinstance(victim, dict) else {}) or {}
 
-                # Рамка по Tier
-                tier = self._parse_tier(item_type)
-                color = TIER_COLORS.get(tier, (100, 100, 100))
-                draw.rounded_rectangle([sx - 1, sy - 1, sx + 57, sy + 57], radius=4, outline=color, width=2)
-
-                # Подпись (Tier.Enchant)
-                label = self._format_label(item_type)
-                lw = draw.textlength(label, font=font_small)
-                draw.text((sx + 28 - lw // 2, sy + 58), label, fill=(200, 200, 200), font=font_small)
+        self._draw_matrix(draw, img, k_equip, MATRIX_START_X_KILLER, MATRIX_START_Y, font_tiny)
+        self._draw_matrix(draw, img, v_equip, MATRIX_START_X_VICTIM, MATRIX_START_Y, font_tiny)
 
         # Футер
-        draw.line([15, self.height - 25, self.width - 15, self.height - 25], fill=(60, 60, 70), width=1)
-        draw.text((20, self.height - 22), "Albion Eclipse Killboard", fill=(120, 120, 130), font=font_small)
+        draw.line([12, self.height - 22, self.width - 12, self.height - 22], fill=(60, 60, 75), width=1)
+        draw.text((15, self.height - 20), "Albion Eclipse Killboard", fill=(100, 100, 120), font=font_small)
 
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)
         return buf
+
+    def _draw_matrix(self, draw, img, equip, start_x, start_y, font):
+        """Рисует матрицу 3x3 + Food/Potion с иконками."""
+        for slot_name, (col, row) in SLOT_LAYOUT["killer"].items():
+            x = start_x + col * COL_SPACING
+            y = start_y + row * ROW_SPACING
+
+            # Фон слота
+            draw.rounded_rectangle([x, y, x + ICON_SIZE, y + ICON_SIZE], radius=4, fill=(40, 40, 50))
+
+            item = equip.get(slot_name)
+            if item:
+                item_type = item.get("Type", "") if isinstance(item, dict) else item
+                if item_type:
+                    icon_data = self.api.fetch_icon(item_type)
+                    try:
+                        icon = Image.open(io.BytesIO(icon_data)).convert("RGBA").resize((ICON_SIZE - 4, ICON_SIZE - 4))
+                        img.paste(icon, (x + 2, y + 2), icon)
+                    except:
+                        pass
+
+                    # Рамка по тиру
+                    tier = self._parse_tier(item_type)
+                    color = TIER_COLORS.get(tier, (100, 100, 100))
+                    draw.rounded_rectangle([x, y, x + ICON_SIZE, y + ICON_SIZE], radius=4, outline=color, width=2)
+
+                    # Подпись
+                    label = self._format_label(item_type)
+                    lw = draw.textlength(label, font=font)
+                    draw.text((x + ICON_SIZE // 2 - lw // 2, y + ICON_SIZE + 2), label, fill=(180, 180, 180), font=font)
 
     def _parse_tier(self, item_type: str) -> int:
         try:
@@ -146,7 +194,7 @@ class ImageRenderer:
             return 4
 
     def _format_label(self, item_type: str) -> str:
-        base = item_type.split("@")[0]
+        base = item_type.split("@")[0] if "@" in item_type else item_type
         enchant = ""
         if "@" in item_type:
             enchant = f".{item_type.split('@')[1]}"
