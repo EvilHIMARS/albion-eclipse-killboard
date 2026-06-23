@@ -1,5 +1,6 @@
 import os
 import asyncio
+import io
 import logging
 import json
 from datetime import datetime, timezone, timedelta
@@ -18,6 +19,7 @@ from tracker import is_guild_kill
 from image_renderer import ImageRenderer
 from render_api import RenderAPI
 from cache_manager import IconCache
+from price_estimator import estimate_total_loss, format_silver
 
 _icon_cache = IconCache()
 _render_api = RenderAPI(_icon_cache)
@@ -237,22 +239,35 @@ def create_battle_embed(event, title, color_hex):
     killer_ip = killer.get('AverageItemPower', 0)
     victim_ip = victim.get('AverageItemPower', 0)
 
+    # Silver Loss
+    victim_eq = (victim.get("Equipment") or {})
+    silver_loss = estimate_total_loss(victim_eq)
+    loss_str = format_silver(silver_loss)
+
     killboard_url = f"https://albiononline.com/killboard/kill/{event_id}"
 
     embed = discord.Embed(
         title=title,
         url=killboard_url,
         color=color_hex,
-        description=f"**{killer_name}** `[{killer_guild}]` IP:{killer_ip:.0f} ☠️ **{victim_name}** `[{victim_guild}]` IP:{victim_ip:.0f}\n🏆 Fame: **{fame:,}**"
+        description=f"**{killer_name}** `[{killer_guild}]` IP:{killer_ip:.0f} ☠️ **{victim_name}** `[{victim_guild}]` IP:{victim_ip:.0f}\n🏆 Fame: **{fame:,}**\n💰 Estimated Loss: **{loss_str}**"
     )
     embed.set_image(url="attachment://killcard.png")
     embed.set_footer(text="Albion Eclipse Killboard | Dev: EvilHIMARS")
 
-    event_dict = _event_to_dict(event)
-    is_kill = "KILL" in title.upper() or "ASSIST" in title.upper() or "ВБИВСТВО" in title.upper() or "УБИЙСТВО" in title.upper() or "АСИСТ" in title.upper()
-    img_buf = _img_renderer.render(event_dict, is_kill=is_kill)
-    file = discord.File(img_buf, filename="killcard.png")
+    try:
+        event_dict = _event_to_dict(event)
+        is_kill = "KILL" in title.upper() or "ASSIST" in title.upper() or "ВБИВСТВО" in title.upper() or "УБИЙСТВО" in title.upper() or "АСИСТ" in title.upper()
+        img_buf = _img_renderer.render(event_dict, is_kill=is_kill)
+    except Exception as e:
+        logger.error(f"❌ [RENDER] Помилка генерації картки: {e}")
+        from PIL import Image
+        img = Image.new("RGBA", (200, 100), (30, 30, 30))
+        img_buf = io.BytesIO()
+        img.save(img_buf, format="PNG")
+        img_buf.seek(0)
 
+    file = discord.File(img_buf, filename="killcard.png")
     return embed, file
 
 def manage_cache(event_id):
@@ -506,7 +521,11 @@ async def scan(interaction: discord.Interaction):
                 embed, file = create_battle_embed(event, "🤝 ЗНАЙДЕНО АСИСТ (СКАН)", 0x3498db)
             else:
                 continue
-            await interaction.followup.send(embed=embed, file=file)
+            try:
+                await interaction.followup.send(embed=embed, file=file)
+                await asyncio.sleep(0.5)
+            except Exception as send_err:
+                logger.error(f"❌ [SCAN] Помилка відправки: {send_err}")
 
         total = found_kills + found_deaths + found_assists
         if total > 0:
@@ -529,7 +548,11 @@ async def scanlive(interaction: discord.Interaction):
 
         for event in events:
             embed, file = create_battle_embed(event, f"⚔️ #{event.get('EventId', '?')}", 0x3498db)
-            await interaction.followup.send(embed=embed, file=file)
+            try:
+                await interaction.followup.send(embed=embed, file=file)
+                await asyncio.sleep(0.5)
+            except Exception as send_err:
+                logger.error(f"❌ [SCANLIVE] Помилка відправки: {send_err}")
 
     except Exception as e:
         await interaction.followup.send(t("api_error", error=str(e)))
@@ -548,7 +571,11 @@ async def lastkills(interaction: discord.Interaction, count: int = 5):
 
         for event in events[:count]:
             embed, file = create_battle_embed(event, f"🌐 #{event.get('EventId', '?')}", 0x95a5a6)
-            await interaction.followup.send(embed=embed, file=file)
+            try:
+                await interaction.followup.send(embed=embed, file=file)
+                await asyncio.sleep(0.5)
+            except Exception as send_err:
+                logger.error(f"❌ [LASTKILLS] Помилка відправки: {send_err}")
 
     except Exception as e:
         await interaction.followup.send(t("api_error", error=str(e)))
